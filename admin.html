@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin — Poyoweb</title>
+  <style>
+    :root{ --bg:#f6f7fb; --card:#fff; --accent:#2274a5; --danger:#e05858 }
+    body{ font-family:Inter,system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); margin:0; color:#111 }
+    .wrap{ max-width:1100px; margin:26px auto; padding:20px }
+    .row{ display:flex; gap:12px; align-items:center }
+    .card{ background:var(--card); border-radius:10px; padding:16px; box-shadow:0 8px 20px rgba(15,23,42,0.06); }
+    h1{ margin:0 0 12px }
+    input, textarea{ padding:8px 10px; border-radius:8px; border:1px solid #e6e9f0 }
+    textarea{ min-height:80px }
+    button{ background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .danger{ background:var(--danger) }
+    .list{ margin-top:12px }
+    .item{ display:flex; justify-content:space-between; gap:12px; padding:10px; border-bottom:1px solid #f0f2f7 }
+    .muted{ color:#666 }
+    .small{ padding:6px 8px; border-radius:6px; border:none; cursor:pointer }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Admin</h1>
+      <div id="status" class="muted">Checking status...</div>
+      <div id="loginBox" style="margin-top:12px"></div>
+      <div id="adminUI" style="display:none; margin-top:14px">
+        <section>
+          <h3>Add Item</h3>
+          <div class="row">
+            <input id="title" placeholder="Title">
+            <input id="user" placeholder="@username">
+            <input id="url" placeholder="https://...">
+          </div>
+          <div style="margin-top:8px"><textarea id="desc" placeholder="Short description"></textarea></div>
+          <div style="margin-top:8px"><button id="addBtn">Add</button> <button id="logoutBtn" class="small">Logout</button></div>
+        </section>
+
+        <section class="list" id="itemsList"></section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let token = '';
+    async function status(){
+      const r = await fetch('api/auth.php');
+      const j = await r.json();
+      if (j.logged_in){ token = j.token || ''; showAdmin(); } else { showLogin(j.admin_exists); }
+      document.getElementById('status').textContent = j.logged_in ? 'Logged in as admin' : 'Not logged in';
+    }
+
+    function showLogin(adminExists){
+      const box = document.getElementById('loginBox'); box.innerHTML = '';
+      const form = document.createElement('div');
+      form.innerHTML = `
+        <input id="li-user" placeholder="username"> <input id="li-pass" type="password" placeholder="password"> <button id="li-btn">${adminExists ? 'Login' : 'Create Admin'}</button>
+      `;
+      box.appendChild(form);
+      document.getElementById('li-btn').addEventListener('click', async ()=>{
+        const u = document.getElementById('li-user').value; const p = document.getElementById('li-pass').value;
+        const action = adminExists ? 'login' : 'setup';
+        const res = await fetch('api/auth.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action, username:u, password:p})});
+        const j = await res.json();
+        if (j.ok){ token = j.token || ''; showAdmin(); document.getElementById('status').textContent = 'Logged in as admin'; } else { alert(j.error || 'Login failed'); }
+      });
+    }
+
+    async function showAdmin(){
+      document.getElementById('loginBox').style.display='none'; document.getElementById('adminUI').style.display='block';
+      document.getElementById('addBtn').addEventListener('click', addItem);
+      document.getElementById('logoutBtn').addEventListener('click', async ()=>{ await fetch('api/auth.php?logout=1'); location.reload(); });
+      loadItems();
+    }
+
+    async function loadItems(){
+      const r = await fetch('api/items.php'); const j = await r.json(); const list = document.getElementById('itemsList'); list.innerHTML='';
+      (j.items || []).forEach(it=>{
+        const el = document.createElement('div'); el.className='item'; el.innerHTML = `<div><strong>${escapeHtml(it.title)}</strong><div class="muted">${escapeHtml(it.description)}</div></div><div><button class="small" data-id="${it.id}" onclick="edit(${it.id})">Edit</button> <button class="small danger" onclick="del(${it.id})">Delete</button></div>`;
+        list.appendChild(el);
+      });
+    }
+
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    async function addItem(){
+      const payload = { title: document.getElementById('title').value, description: document.getElementById('desc').value, username: document.getElementById('user').value, url: document.getElementById('url').value };
+      const res = await fetch('api/items.php', {method:'POST', headers: {'Content-Type':'application/json','X-CSRF-Token': token}, body: JSON.stringify(payload)});
+      const j = await res.json(); if (j.ok){ loadItems(); } else { alert(j.error || 'Add failed'); }
+    }
+
+    async function del(id){ if (!confirm('Delete item?')) return; const res = await fetch('api/items.php', {method:'DELETE', headers:{'Content-Type':'application/json','X-CSRF-Token':token}, body: JSON.stringify({id})}); const j = await res.json(); if (j.ok) loadItems(); else alert(j.error||'Delete failed'); }
+
+    function edit(id){ const t = prompt('New title'); if (t===null) return; const d = prompt('New description'); const u = prompt('New username'); const url = prompt('New url'); fetch('api/items.php',{method:'PUT', headers:{'Content-Type':'application/json','X-CSRF-Token':token}, body: JSON.stringify({id, title:t, description:d, username:u, url})}).then(r=>r.json()).then(j=>{ if (j.ok) loadItems(); else alert(j.error||'Update failed'); }); }
+
+    status();
+  </script>
+</body>
+</html>
