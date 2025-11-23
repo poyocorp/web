@@ -66,14 +66,13 @@ mysql -u root -p poyoweb < sql/schema.sql
 
     <section class="card">
       <div class="meta">
-        <h2>3) Configure the app</h2>
-        <div class="row"><a class="btn" href="config.sample.php" target="_blank">Open sample</a></div>
+        <h2>3) Configure the app (optional)</h2>
+        <div class="row"><span class="muted">This site is distributed without server-side PHP enabled. If you later add a backend, create a configuration file on the server.</span></div>
       </div>
       <pre id="cmd-config"><button class="copy-btn" data-target="cmd-config">Copy</button><code>
-cp config.sample.php config.php
-# edit config.php and set DSN, user, and password
+    # If you add a PHP backend later, create a server-side config.php with your DSN and credentials.
       </code></pre>
-      <p class="note">Copy <code>config.sample.php</code> to <code>config.php</code> and edit it. Don't commit real credentials to Git.</p>
+      <p class="note">This distribution does not include server-side config files. Use the static admin at <a href="/admin.html">admin.html</a> to edit data locally.</p>
     </section>
 
     <div style="height:12px"></div>
@@ -81,9 +80,9 @@ cp config.sample.php config.php
     <section class="card">
       <div class="meta">
         <h2>4) Initialize admin</h2>
-        <div class="row"><a class="btn" href="admin.php">Open Admin</a></div>
+        <div class="row"><a class="btn" href="admin.html">Open Admin (static)</a></div>
       </div>
-      <p class="note">Visit <code>/admin.php</code> in your browser and create the admin account. The site will then use MySQL when <code>config.php</code> is present and the connection succeeds.</p>
+      <p class="note">Visit <code>/admin.html</code> to open the static editor. To persist changes to the server, download the JSON from that editor and upload it to <code>data/stuff.json</code>.</p>
     </section>
 
     <div style="height:12px"></div>

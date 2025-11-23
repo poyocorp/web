@@ -24,79 +24,76 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Admin</h1>
-      <div id="status" class="muted">Checking status...</div>
-      <div id="loginBox" style="margin-top:12px"></div>
-      <div id="adminUI" style="display:none; margin-top:14px">
-        <section>
+        <h1>Admin (static editor)</h1>
+        <p class="muted">This is a client-only editor. It loads <code>data/stuff.json</code>, lets you edit items in the browser, and download an updated JSON file to upload to your server (FTP/file manager).</p>
+
+        <section style="margin-top:12px">
           <h3>Add Item</h3>
           <div class="row">
             <input id="title" placeholder="Title">
             <input id="user" placeholder="@username">
             <input id="url" placeholder="https://...">
+            <button id="addBtn">Add</button>
           </div>
           <div style="margin-top:8px"><textarea id="desc" placeholder="Short description"></textarea></div>
-          <div style="margin-top:8px"><button id="addBtn">Add</button> <button id="logoutBtn" class="small">Logout</button></div>
         </section>
 
-        <section class="list" id="itemsList"></section>
+        <section style="margin-top:14px">
+          <div class="row" style="align-items:center;gap:8px;margin-bottom:10px">
+            <button id="downloadBtn" class="small">Download JSON</button>
+            <label style="display:inline-block;" class="small">Upload JSON <input id="uploadFile" type="file" accept="application/json" style="display:none"></label>
+            <button id="reloadBtn" class="small">Reload from server</button>
+          </div>
+          <div class="list" id="itemsList"></div>
+        </section>
       </div>
-    </div>
   </div>
 
   <script>
-    let token = '';
-    async function status(){
-      const r = await fetch('api/auth.php');
-      const j = await r.json();
-      if (j.logged_in){ token = j.token || ''; showAdmin(); } else { showLogin(j.admin_exists); }
-      document.getElementById('status').textContent = j.logged_in ? 'Logged in as admin' : 'Not logged in';
-    }
-
-    function showLogin(adminExists){
-      const box = document.getElementById('loginBox'); box.innerHTML = '';
-      const form = document.createElement('div');
-      form.innerHTML = `
-        <input id="li-user" placeholder="username"> <input id="li-pass" type="password" placeholder="password"> <button id="li-btn">${adminExists ? 'Login' : 'Create Admin'}</button>
-      `;
-      box.appendChild(form);
-      document.getElementById('li-btn').addEventListener('click', async ()=>{
-        const u = document.getElementById('li-user').value; const p = document.getElementById('li-pass').value;
-        const action = adminExists ? 'login' : 'setup';
-        const res = await fetch('api/auth.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action, username:u, password:p})});
-        const j = await res.json();
-        if (j.ok){ token = j.token || ''; showAdmin(); document.getElementById('status').textContent = 'Logged in as admin'; } else { alert(j.error || 'Login failed'); }
-      });
-    }
-
-    async function showAdmin(){
-      document.getElementById('loginBox').style.display='none'; document.getElementById('adminUI').style.display='block';
-      document.getElementById('addBtn').addEventListener('click', addItem);
-      document.getElementById('logoutBtn').addEventListener('click', async ()=>{ await fetch('api/auth.php?logout=1'); location.reload(); });
-      loadItems();
-    }
-
+    let items = [];
     async function loadItems(){
-      const r = await fetch('api/items.php'); const j = await r.json(); const list = document.getElementById('itemsList'); list.innerHTML='';
-      (j.items || []).forEach(it=>{
-        const el = document.createElement('div'); el.className='item'; el.innerHTML = `<div><strong>${escapeHtml(it.title)}</strong><div class="muted">${escapeHtml(it.description)}</div></div><div><button class="small" data-id="${it.id}" onclick="edit(${it.id})">Edit</button> <button class="small danger" onclick="del(${it.id})">Delete</button></div>`;
+      try{
+        const r = await fetch('data/stuff.json', {cache:'no-store'});
+        items = await r.json();
+      }catch(e){ items = []; }
+      renderItems();
+    }
+
+    function renderItems(){
+      const list = document.getElementById('itemsList'); list.innerHTML = '';
+      items.forEach((it, idx) =>{
+        const el = document.createElement('div'); el.className='item';
+        el.innerHTML = `<div><strong>${escapeHtml(it.title)}</strong><div class="muted">${escapeHtml(it.description)}</div></div><div><button class="small" data-idx="${idx}" onclick="edit(${idx})">Edit</button> <button class="small danger" onclick="del(${idx})">Delete</button></div>`;
         list.appendChild(el);
       });
     }
 
     function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    async function addItem(){
-      const payload = { title: document.getElementById('title').value, description: document.getElementById('desc').value, username: document.getElementById('user').value, url: document.getElementById('url').value };
-      const res = await fetch('api/items.php', {method:'POST', headers: {'Content-Type':'application/json','X-CSRF-Token': token}, body: JSON.stringify(payload)});
-      const j = await res.json(); if (j.ok){ loadItems(); } else { alert(j.error || 'Add failed'); }
-    }
+    document.getElementById('addBtn').addEventListener('click', ()=>{
+      const title = document.getElementById('title').value.trim();
+      if(!title) return alert('Title required');
+      const item = { id: Date.now(), title, description: document.getElementById('desc').value||'', username: document.getElementById('user').value||'', url: document.getElementById('url').value||'' };
+      items.push(item); renderItems();
+    });
 
-    async function del(id){ if (!confirm('Delete item?')) return; const res = await fetch('api/items.php', {method:'DELETE', headers:{'Content-Type':'application/json','X-CSRF-Token':token}, body: JSON.stringify({id})}); const j = await res.json(); if (j.ok) loadItems(); else alert(j.error||'Delete failed'); }
+    function del(idx){ if (!confirm('Delete item?')) return; items.splice(idx,1); renderItems(); }
 
-    function edit(id){ const t = prompt('New title'); if (t===null) return; const d = prompt('New description'); const u = prompt('New username'); const url = prompt('New url'); fetch('api/items.php',{method:'PUT', headers:{'Content-Type':'application/json','X-CSRF-Token':token}, body: JSON.stringify({id, title:t, description:d, username:u, url})}).then(r=>r.json()).then(j=>{ if (j.ok) loadItems(); else alert(j.error||'Update failed'); }); }
+    function edit(idx){ const it = items[idx]; if(!it) return; const title = prompt('Title', it.title); if(title===null) return; const desc = prompt('Description', it.description); if(desc===null) return; const user = prompt('Username', it.username); if(user===null) return; const url = prompt('URL', it.url); if(url===null) return; items[idx] = { ...it, title, description: desc, username: user, url }; renderItems(); }
 
-    status();
+    document.getElementById('downloadBtn').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'stuff.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('uploadFile').addEventListener('change', async (e)=>{
+      const f = e.target.files[0]; if(!f) return; const text = await f.text(); try{ const parsed = JSON.parse(text); if(!Array.isArray(parsed)) throw new Error('Expected array'); items = parsed; renderItems(); alert('Loaded JSON into editor. To persist to server, download and upload to server path `data/stuff.json`.'); }catch(err){ alert('Invalid JSON: '+err.message); }
+    });
+
+    document.getElementById('reloadBtn').addEventListener('click', ()=>loadItems());
+
+    loadItems();
   </script>
 </body>
 </html>

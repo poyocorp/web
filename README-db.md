@@ -16,10 +16,10 @@ FLUSH PRIVILEGES;
 mysql -u root -p poyoweb < sql/schema.sql
 ```
 
-3) Copy `config.sample.php` to `config.php` and edit the DSN, user and pass.
+3) (Optional) If you later add a server backend, create a server-side `config.php` with your DSN, user and password.
 
-4) Visit `/admin.php` and create the admin user (setup). The site will then use MySQL.
+4) This distribution is static — use `/admin.html` to edit `data/stuff.json` in your browser. To persist changes, download the JSON from the editor and upload it to the server path `data/stuff.json` using your host's file manager or FTP.
 
 Notes
-- `admin.php` will automatically fall back to the existing JSON files if `config.php` is missing or the DB connection fails.
-- Ensure your webserver user can read `config.php` but don't commit real credentials to Git.
+- This repository does not include a running PHP backend. If you add one, follow the SQL steps above and create `config.php` on the server.
+- Make sure any server-side config containing credentials is not committed to source control.
