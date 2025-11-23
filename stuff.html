@@ -20,7 +20,7 @@
     .visit{ background:var(--accent); color:#003; padding:12px 18px; border-radius:12px; text-decoration:none; font-weight:700; box-shadow:0 4px 8px rgba(0,0,0,0.08) }
     .visit:focus,.visit:hover{ transform:translateY(-2px) }
     .toolbar{ display:flex; gap:12px; justify-content:flex-end; margin-bottom:12px }
-    .back{ background:transparent; border:1px solid rgba(0,0,0,0.06); padding:8px 12px; border-radius:10px; text-decoration:none }
+    .back{ position:fixed; top:12px; left:12px; z-index:1000; background:transparent; border:1px solid rgba(0,0,0,0.06); padding:8px 12px; border-radius:10px; text-decoration:none }
     .empty{ text-align:center; padding:40px; font-size:18px; color:rgba(0,0,0,0.6) }
     @media (max-width:420px){ h1{ font-size:40px } .card h3{ font-size:28px } }
   </style>
@@ -30,11 +30,8 @@
     <h1>Stuff</h1>
   </header>
 
-  <div class="container">
-    <div class="toolbar">
-      <a class="back" href="/">← Home</a>
-      <a class="back" href="admin.php">Admin</a>
-    </div>
+    <div class="container">
+    <a class="back" href="/">← Home</a>
 
     <div id="grid" class="grid" aria-live="polite"></div>
     <div id="empty" class="empty" style="display:none">No items yet — check back later or use the Admin to add items.</div>
