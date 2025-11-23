@@ -51,14 +51,12 @@
 
   <script>
     let items = [];
-    // Client-side admin password hash (SHA-256 hex). Change this value if you want a different password.
-    // Current default matches the password: SproutPoyoCorp943/
-    const ADMIN_PW_HASH = '6c75ab93850db9a5e5c3e19869f96dc3ffadbbc9a4f58dc54ddd2a6be958204c';
-
+    let loggedIn = false;
     async function loadItems(){
       try{
-        const r = await fetch('data/stuff.json', {cache:'no-store'});
-        items = await r.json();
+        const r = await fetch('api/items.php', {cache:'no-store', credentials: 'include'});
+        const j = await r.json();
+        items = j.ok ? j.items : [];
       }catch(e){ items = []; }
       renderItems();
     }
@@ -74,45 +72,45 @@
 
     function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    document.getElementById('addBtn').addEventListener('click', ()=>{
+    document.getElementById('addBtn').addEventListener('click', async ()=>{
       const title = document.getElementById('title').value.trim();
       if(!title) return alert('Title required');
-      const item = { id: Date.now(), title, description: document.getElementById('desc').value||'', username: document.getElementById('user').value||'', url: document.getElementById('url').value||'' };
-      items.push(item); renderItems();
+      const payload = { action: 'create', title, description: document.getElementById('desc').value||'', username: document.getElementById('user').value||'', url: document.getElementById('url').value||'' };
+      try{
+        const r = await fetch('api/items.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials: 'include' });
+        const j = await r.json();
+        if (j.ok) { loadItems(); } else alert('Create failed: '+(j.error||'unknown'));
+      }catch(e){ alert('Create failed: '+e.message); }
     });
 
-    // --- simple client-side login ---
-    function buf2hex(buffer){ return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
-    async function sha256hex(msg){ const enc = new TextEncoder(); const buf = await crypto.subtle.digest('SHA-256', enc.encode(msg)); return buf2hex(buf); }
-
-    async function tryLogin(password){
-      const h = await sha256hex(password);
-      return h === ADMIN_PW_HASH;
-    }
-
-    // Insert login UI above editor
+    // Insert login UI above editor (server-backed login)
     const wrap = document.querySelector('.card');
     const loginBox = document.createElement('div');
     loginBox.style.marginBottom = '12px';
-    loginBox.innerHTML = `<div style="margin-bottom:8px"><input id="adminPassInput" type="password" placeholder="Admin password"> <button id="adminLoginBtn" class="small">Unlock</button></div><div id="adminLoginMsg" class="muted"></div>`;
+    loginBox.innerHTML = `<div style="margin-bottom:8px"><input id="adminUserInput" placeholder="username"> <input id="adminPassInput" type="password" placeholder="password"> <button id="adminLoginBtn" class="small">Sign in</button> <button id="adminLogoutBtn" class="small" style="display:none">Sign out</button></div><div id="adminLoginMsg" class="muted"></div>`;
     wrap.insertBefore(loginBox, wrap.firstChild);
+
     document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
+      const u = document.getElementById('adminUserInput').value || '';
       const p = document.getElementById('adminPassInput').value || '';
-      if (!p) { document.getElementById('adminLoginMsg').textContent = 'Enter password'; return; }
-      const ok = await tryLogin(p);
-      if (ok) { loginBox.style.display='none'; document.getElementById('downloadBtn').disabled = false; document.getElementById('uploadFile').disabled = false; document.getElementById('addBtn').disabled = false; document.getElementById('reloadBtn').disabled = false; document.getElementById('adminLoginMsg').textContent = ''; }
-      else { document.getElementById('adminLoginMsg').textContent = 'Invalid password'; }
+      if (!u || !p) { document.getElementById('adminLoginMsg').textContent = 'Enter username and password'; return; }
+      document.getElementById('adminLoginMsg').textContent = 'Signing in...';
+      try{
+        const r = await fetch('api/auth.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, password: p }), credentials: 'include' });
+        const j = await r.json();
+        if (j.ok) { loggedIn = true; document.getElementById('adminLoginMsg').textContent = 'Signed in as '+(j.username||u); document.getElementById('adminLoginBtn').style.display='none'; document.getElementById('adminLogoutBtn').style.display='inline-block'; loadItems(); }
+        else { document.getElementById('adminLoginMsg').textContent = j.error || 'Login failed'; }
+      }catch(err){ document.getElementById('adminLoginMsg').textContent = err.message; }
     });
 
-    // Disable editor controls until unlocked
-    document.getElementById('downloadBtn').disabled = true;
-    document.getElementById('uploadFile').disabled = true;
-    document.getElementById('addBtn').disabled = true;
-    document.getElementById('reloadBtn').disabled = false; // allow reload without auth
+    document.getElementById('adminLogoutBtn').addEventListener('click', async ()=>{
+      await fetch('api/auth.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'logout' }), credentials: 'include' });
+      loggedIn = false; document.getElementById('adminLoginBtn').style.display='inline-block'; document.getElementById('adminLogoutBtn').style.display='none'; document.getElementById('adminLoginMsg').textContent = 'Signed out';
+    });
 
-    function del(idx){ if (!confirm('Delete item?')) return; items.splice(idx,1); renderItems(); }
+    async function del(idx){ if (!confirm('Delete item?')) return; const it = items[idx]; try{ const r = await fetch('api/items.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id: it.id }), credentials: 'include' }); const j = await r.json(); if (j.ok) loadItems(); else alert('Delete failed: '+(j.error||'unknown')); }catch(e){ alert('Delete failed: '+e.message); } }
 
-    function edit(idx){ const it = items[idx]; if(!it) return; const title = prompt('Title', it.title); if(title===null) return; const desc = prompt('Description', it.description); if(desc===null) return; const user = prompt('Username', it.username); if(user===null) return; const url = prompt('URL', it.url); if(url===null) return; items[idx] = { ...it, title, description: desc, username: user, url }; renderItems(); }
+    async function edit(idx){ const it = items[idx]; if(!it) return; const title = prompt('Title', it.title); if(title===null) return; const desc = prompt('Description', it.description); if(desc===null) return; const user = prompt('Username', it.username); if(user===null) return; const url = prompt('URL', it.url); if(url===null) return; try{ const r = await fetch('api/items.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'update', id: it.id, title, description: desc, username: user, url }), credentials: 'include' }); const j = await r.json(); if (j.ok) loadItems(); else alert('Update failed: '+(j.error||'unknown')); }catch(e){ alert('Update failed: '+e.message); } }
 
     document.getElementById('downloadBtn').addEventListener('click', ()=>{
       const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});

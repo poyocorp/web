@@ -40,9 +40,10 @@
   <script>
     async function load(){
       try{
-        const res = await fetch('data/stuff.json', {cache: 'no-store'});
+        const res = await fetch('api/items.php', {cache: 'no-store'});
         if(!res.ok) throw new Error('Failed to load');
-        const items = await res.json();
+        const jr = await res.json();
+        const items = jr.ok ? jr.items : [];
         const grid = document.getElementById('grid');
         grid.innerHTML = '';
         if(!items || items.length === 0){ document.getElementById('empty').style.display='block'; return }
