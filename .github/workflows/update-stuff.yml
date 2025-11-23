@@ -23,15 +23,7 @@ jobs:
 
       - name: Validate JSON
         run: |
-          python3 - <<'PY'
-import json,sys
-try:
-    with open('data/stuff.json','r') as f:
-        json.load(f)
-except Exception as e:
-    print('Invalid JSON:', e)
-    sys.exit(1)
-PY
+          python3 -m json.tool data/stuff.json >/dev/null
 
       - name: Commit and push
         env:
