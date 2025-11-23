@@ -51,6 +51,10 @@
 
   <script>
     let items = [];
+    // Client-side admin password hash (SHA-256 hex). Change this value if you want a different password.
+    // Current default matches the password: SproutPoyoCorp943/
+    const ADMIN_PW_HASH = '6c75ab93850db9a5e5c3e19869f96dc3ffadbbc9a4f58dc54ddd2a6be958204c';
+
     async function loadItems(){
       try{
         const r = await fetch('data/stuff.json', {cache:'no-store'});
@@ -76,6 +80,35 @@
       const item = { id: Date.now(), title, description: document.getElementById('desc').value||'', username: document.getElementById('user').value||'', url: document.getElementById('url').value||'' };
       items.push(item); renderItems();
     });
+
+    // --- simple client-side login ---
+    function buf2hex(buffer){ return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+    async function sha256hex(msg){ const enc = new TextEncoder(); const buf = await crypto.subtle.digest('SHA-256', enc.encode(msg)); return buf2hex(buf); }
+
+    async function tryLogin(password){
+      const h = await sha256hex(password);
+      return h === ADMIN_PW_HASH;
+    }
+
+    // Insert login UI above editor
+    const wrap = document.querySelector('.card');
+    const loginBox = document.createElement('div');
+    loginBox.style.marginBottom = '12px';
+    loginBox.innerHTML = `<div style="margin-bottom:8px"><input id="adminPassInput" type="password" placeholder="Admin password"> <button id="adminLoginBtn" class="small">Unlock</button></div><div id="adminLoginMsg" class="muted"></div>`;
+    wrap.insertBefore(loginBox, wrap.firstChild);
+    document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
+      const p = document.getElementById('adminPassInput').value || '';
+      if (!p) { document.getElementById('adminLoginMsg').textContent = 'Enter password'; return; }
+      const ok = await tryLogin(p);
+      if (ok) { loginBox.style.display='none'; document.getElementById('downloadBtn').disabled = false; document.getElementById('uploadFile').disabled = false; document.getElementById('addBtn').disabled = false; document.getElementById('reloadBtn').disabled = false; document.getElementById('adminLoginMsg').textContent = ''; }
+      else { document.getElementById('adminLoginMsg').textContent = 'Invalid password'; }
+    });
+
+    // Disable editor controls until unlocked
+    document.getElementById('downloadBtn').disabled = true;
+    document.getElementById('uploadFile').disabled = true;
+    document.getElementById('addBtn').disabled = true;
+    document.getElementById('reloadBtn').disabled = false; // allow reload without auth
 
     function del(idx){ if (!confirm('Delete item?')) return; items.splice(idx,1); renderItems(); }
 
