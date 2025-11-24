@@ -4,89 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sprout Unboxing</title>
-        <style>
-        /* --- 1. Font Loading (Same as index) --- */
-        @font-face {
-            font-family: 'KirbyFont';
-            src: url('fonts/kirb.ttf') format('truetype');
-        }
-
-        /* --- 2. General Styles --- */
-        body {
-            margin: 0;
-            padding: 20px;
-            background-color: #ffe96b; /* The Sprout Yellow */
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-        }
-
-        /* --- 3. Title Styles --- */
-        h1 {
-            font-family: 'KirbyFont', sans-serif;
-            font-size: 40px;
-            font-style: italic;
-            margin-bottom: 20px;
-            text-align: center;
-            color: #000;
-        }
-
-        /* --- 4. Video Player Styles --- */
-        .video-container {
-            width: 100%;
-            max-width: 800px; /* Limits width on big screens */
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2); /* Nice shadow */
-            border-radius: 15px;
-            overflow: hidden;
-            background-color: #000;
-        }
-
-        video {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        /* --- 5. Back Button --- */
-        .back-link {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            text-decoration: none;
-            color: #000;
-            font-weight: bold;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: transform 0.2s;
-        }
-
-        .back-link:hover {
-            transform: translateX(-5px); /* Slide left on hover */
-        }
-
-        /* Mobile adjustment */
-        @media screen and (max-width: 600px) {
-            h1 { font-size: 30px; margin-top: 40px; }
-            .back-link { font-size: 16px; }
-        }
-    </style>
+    <link rel="icon" type="image/png" href="../assets/happy-sprout.png" />
+    <link rel="stylesheet" href="main.css">
 </head>
-<body>
+<body class="unboxing-body">
 
-    <a href="../index.html" class="back-link">
+    <a href="../index.html" class="unboxing-back-link">
         <span>&#8592;</span> Back
     </a>
 
-    <h1>Sprout Poyo Unboxing</h1>
+    <h1 class="unboxing-title">Sprout Poyo Unboxing</h1>
 
-    <div class="video-container">
-        <video controls autoplay>
+    <div class="unboxing-video-container">
+        <video controls autoplay class="unboxing-video">
             <source src="https://raw.githubusercontent.com/poyocorp/web/refs/heads/main/assets/unboxing.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>

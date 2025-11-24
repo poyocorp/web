@@ -112,8 +112,6 @@ body {
     padding: 30px;
     background-color: #fafafa;
     border-top: 1px solid #eee;
-
-    /* override newer layout */
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -389,5 +387,73 @@ body.menu-open .open-btn {
     }
     .stuff-card h3 {
         font-size: 28px;
+    }
+}
+
+/* ----------------------------------------------------
+   7. Unboxing Page Styles
+---------------------------------------------------- */
+.unboxing-body {
+    margin: 0;
+    padding: 20px;
+    background-color: #ffe96b;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.unboxing-title {
+    font-family: 'KirbyFont', sans-serif;
+    font-size: 40px;
+    font-style: italic;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #000;
+}
+
+.unboxing-video-container {
+    width: 100%;
+    max-width: 800px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    border-radius: 15px;
+    overflow: hidden;
+    background-color: #000;
+}
+
+.unboxing-video {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.unboxing-back-link {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: transform 0.2s;
+}
+
+.unboxing-back-link:hover {
+    transform: translateX(-5px);
+}
+
+@media screen and (max-width: 600px) {
+    .unboxing-title {
+        font-size: 30px;
+        margin-top: 40px;
+    }
+    .unboxing-back-link {
+        font-size: 16px;
     }
 }
