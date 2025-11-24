@@ -457,3 +457,189 @@ body.menu-open .open-btn {
         font-size: 16px;
     }
 }
+
+/* ----------------------------------------------------
+   8. SproutTube Page Styles
+---------------------------------------------------- */
+.sprouttube-body {
+    margin: 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--muted);
+}
+
+.sprouttube-header {
+    padding: 24px 20px 10px;
+    text-align: center;
+}
+
+.sprouttube-title {
+    font-family: 'KirbyFont', sans-serif;
+    font-size: 64px;
+    margin: 0;
+}
+
+.sprouttube-container {
+    max-width: 1400px; /* Aumentado para acomodar casillas más grandes */
+    margin: 20px auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.sprouttube-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); /* Casillas más grandes */
+    gap: 30px; /* Más espacio entre casillas */
+    justify-items: center;
+    width: 100%;
+}
+
+.sprouttube-card {
+    background: var(--card);
+    border-radius: 20px; /* Bordes más redondeados */
+    padding: 28px; /* Más padding interno */
+    width: 100%;
+    max-width: 450px; /* Ancho máximo aumentado */
+    min-height: 520px; /* Altura mínima para uniformidad */
+    text-align: center;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15); /* Sombra más pronunciada */
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease, box-shadow 0.3s ease; /* Transición suave */
+}
+
+.sprouttube-card:hover {
+    transform: translateY(-5px); /* Efecto de elevación al hover */
+    box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+}
+
+.sprouttube-card h3 {
+    margin: 0 0 15px;
+    font-size: 36px; /* Título más grande */
+    line-height: 1.2;
+}
+
+.desc {
+    margin-bottom: 20px;
+    line-height: 1.5;
+    font-size: 17px; /* Texto de descripción ligeramente más grande */
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    margin-bottom: 22px; /* Más margen inferior */
+    border-radius: 14px; /* Bordes más redondeados para el video */
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Sombra sutil para el contenedor de video */
+}
+
+.video-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.sprouttube-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px; /* Más espacio entre elementos */
+    margin-top: auto;
+    padding-top: 18px; /* Más padding superior */
+    border-top: 1px solid rgba(0,0,0,0.1); /* Línea divisoria sutil */
+}
+
+.username {
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 18px; /* Nombre de usuario más grande */
+}
+
+.visit {
+    background: var(--accent);
+    color: #003;
+    padding: 12px 18px; /* Botón más grande */
+    border-radius: 14px; /* Bordes más redondeados */
+    text-decoration: none;
+    font-weight: 700;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+    font-size: 16px; /* Texto del botón más grande */
+    width: 180px; /* Ancho del botón aumentado */
+    text-align: center;
+    transition: all 0.2s ease; /* Transición suave para el botón */
+}
+
+.visit:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+}
+
+.back {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 1000;
+    background: transparent;
+    border: 1px solid rgba(0,0,0,0.06);
+    padding: 8px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #000;
+}
+
+.empty {
+    text-align: center;
+    padding: 40px;
+    font-size: 18px;
+    color: rgba(0,0,0,0.6);
+}
+
+@media (max-width: 768px) {
+    .sprouttube-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); /* Ajuste para tablet */
+        gap: 20px;
+    }
+    
+    .sprouttube-card {
+        max-width: 100%;
+        min-height: 480px;
+        padding: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sprouttube-title {
+        font-size: 48px; /* Título más pequeño en móviles */
+    }
+    
+    .sprouttube-grid {
+        grid-template-columns: 1fr; /* Una columna en móviles */
+        gap: 20px;
+    }
+    
+    .sprouttube-card {
+        min-height: auto; /* Altura automática en móviles */
+        padding: 18px;
+    }
+    
+    .sprouttube-card h3 {
+        font-size: 30px;
+    }
+    
+    .video-container {
+        margin-bottom: 18px;
+    }
+}
