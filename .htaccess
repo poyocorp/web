@@ -1,7 +1,0 @@
-RewriteEngine On
-# Redirect HTTP → HTTPS first
-RewriteCond %{HTTPS} !=on
-RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-# Rewrite URL so page.html can load as /page
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^([^.]+)$ $1.html [NC,L]

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Poyo Stuff</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body class="stuff-body">
+  <header class="stuff-header">
+    <h1 class="stuff-title">Poyo Stuff</h1>
+  </header>
+
+  <div class="stuff-container">
+    <a class="back" href="../index.html">← Home</a>
+
+    <div id="grid" class="stuff-grid" aria-live="polite"></div>
+    <div id="empty" class="empty" style="display:none">
+      No items yet — check back later or use the Admin to add items.
+    </div>
+  </div>
+
+  <script>
+    // ... (el mismo JavaScript se mantiene igual)
+    async function load(){
+      try{
+        const res = await fetch('../data/stuff.json', { cache:'no-store' });
+        if(!res.ok) throw new Error('Failed to load');
+        
+        const items = await res.json();
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+
+        if(!items || items.length === 0){
+          document.getElementById('empty').style.display='block';
+          return;
+        }
+
+        items.forEach(it => {
+          const card = document.createElement('article');
+          card.className = 'stuff-card';
+
+          const imgHtml = it.image
+            ? `<img class="thumb" src="${escapeAttr(it.image)}" alt="${escapeAttr(it.title)}">`
+            : '';
+
+          const sourceBtn = it.source
+            ? `<a class="source" href="${escapeAttr(it.source)}" target="_blank" rel="noopener noreferrer">Source Code 💻</a>`
+            : '';
+
+          card.innerHTML = `
+            <div>
+              ${imgHtml}
+              <h3>${escapeHtml(it.title)}</h3>
+              <p class="desc">${escapeHtml(it.description)}</p>
+            </div>
+
+            <div class="meta">
+              <div class="username">${escapeHtml(it.username)}</div>
+              ${sourceBtn}
+              <a class="visit" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>
+            </div>
+          `;
+
+          grid.appendChild(card);
+        });
+      }catch(err){
+        document.getElementById('empty').textContent = 'Unable to load items.';
+      }
+    }
+
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replace(/&/g,'&amp;')
+              .replace(/</g,'&lt;')
+              .replace(/>/g,'&gt;');
+    }
+
+    function escapeAttr(s){
+      return String(s)
+        .replace(/"/g,'%22')
+        .replace(/'/g,'%27');
+    }
+
+    load();
+  </script>
+</body>
+</html>
