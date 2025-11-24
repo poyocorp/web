@@ -24,6 +24,16 @@
 <body>
   <div class="wrap">
     <div class="card">
+        <div id="adminHeader" style="margin-bottom:12px; display:flex; align-items:center; gap:12px; justify-content:space-between">
+          <div>
+            <strong>Admin</strong>
+          </div>
+          <div>
+            <button id="adminLogoutBtn" class="small" style="display:inline-block">Sign out</button>
+            <span id="adminLoginMsg" class="muted" style="margin-left:8px"></span>
+          </div>
+        </div>
+        <div id="adminUI" style="display:none">
         <h1>Admin (static editor)</h1>
         <p class="muted">This is a client-only editor. It loads <code>data/stuff.json</code>, lets you edit items in the browser, and download an updated JSON file to upload to your server (FTP/file manager).</p>
 
@@ -46,12 +56,14 @@
           </div>
           <div class="list" id="itemsList"></div>
         </section>
+        </div>
       </div>
   </div>
 
   <script>
     let items = [];
     let loggedIn = false;
+
     async function loadItems(){
       try{
         const r = await fetch('api/items.php', {cache:'no-store', credentials: 'include'});
@@ -59,6 +71,36 @@
         items = j.ok ? j.items : [];
       }catch(e){ items = []; }
       renderItems();
+    }
+
+    async function checkAuth(){
+      try{
+        const r = await fetch('api/auth.php', { credentials: 'include' });
+        const j = await r.json();
+        const adminUI = document.getElementById('adminUI');
+        if (j && j.logged_in) {
+          loggedIn = true;
+          adminUI.style.display = 'block';
+          const loginBtn = document.getElementById('adminLoginBtn');
+          const logoutBtn = document.getElementById('adminLogoutBtn');
+          if (loginBtn) loginBtn.style.display = 'none';
+          if (logoutBtn) logoutBtn.style.display = 'inline-block';
+          document.getElementById('adminLoginMsg').textContent = 'Signed in as '+(j.username||'');
+          await loadItems();
+        } else {
+          loggedIn = false;
+          if (adminUI) adminUI.style.display = 'none';
+          const loginBtn = document.getElementById('adminLoginBtn');
+          const logoutBtn = document.getElementById('adminLogoutBtn');
+          if (loginBtn) loginBtn.style.display = 'inline-block';
+          if (logoutBtn) logoutBtn.style.display = 'none';
+          document.getElementById('adminLoginMsg').textContent = '';
+          items = [];
+          renderItems();
+        }
+      }catch(e){
+        console.error('Auth check failed', e);
+      }
     }
 
     function renderItems(){
@@ -83,29 +125,13 @@
       }catch(e){ alert('Create failed: '+e.message); }
     });
 
-    // Insert login UI above editor (server-backed login)
-    const wrap = document.querySelector('.card');
-    const loginBox = document.createElement('div');
-    loginBox.style.marginBottom = '12px';
-    loginBox.innerHTML = `<div style="margin-bottom:8px"><input id="adminUserInput" placeholder="username"> <input id="adminPassInput" type="password" placeholder="password"> <button id="adminLoginBtn" class="small">Sign in</button> <button id="adminLogoutBtn" class="small" style="display:none">Sign out</button></div><div id="adminLoginMsg" class="muted"></div>`;
-    wrap.insertBefore(loginBox, wrap.firstChild);
-
-    document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
-      const u = document.getElementById('adminUserInput').value || '';
-      const p = document.getElementById('adminPassInput').value || '';
-      if (!u || !p) { document.getElementById('adminLoginMsg').textContent = 'Enter username and password'; return; }
-      document.getElementById('adminLoginMsg').textContent = 'Signing in...';
-      try{
-        const r = await fetch('api/auth.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, password: p }), credentials: 'include' });
-        const j = await r.json();
-        if (j.ok) { loggedIn = true; document.getElementById('adminLoginMsg').textContent = 'Signed in as '+(j.username||u); document.getElementById('adminLoginBtn').style.display='none'; document.getElementById('adminLogoutBtn').style.display='inline-block'; loadItems(); }
-        else { document.getElementById('adminLoginMsg').textContent = j.error || 'Login failed'; }
-      }catch(err){ document.getElementById('adminLoginMsg').textContent = err.message; }
-    });
+    // No inline login here; unauthenticated users are redirected to login.html
 
     document.getElementById('adminLogoutBtn').addEventListener('click', async ()=>{
       await fetch('api/auth.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'logout' }), credentials: 'include' });
-      loggedIn = false; document.getElementById('adminLoginBtn').style.display='inline-block'; document.getElementById('adminLogoutBtn').style.display='none'; document.getElementById('adminLoginMsg').textContent = 'Signed out';
+      loggedIn = false;
+      document.getElementById('adminLoginMsg').textContent = 'Signed out';
+      window.location.href = 'login.html';
     });
 
     async function del(idx){ if (!confirm('Delete item?')) return; const it = items[idx]; try{ const r = await fetch('api/items.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id: it.id }), credentials: 'include' }); const j = await r.json(); if (j.ok) loadItems(); else alert('Delete failed: '+(j.error||'unknown')); }catch(e){ alert('Delete failed: '+e.message); } }
@@ -124,7 +150,26 @@
 
     document.getElementById('reloadBtn').addEventListener('click', ()=>loadItems());
 
-    loadItems();
+    // On load, check auth and redirect to login if not authenticated
+    (async function(){
+      try{
+        const r = await fetch('api/auth.php', { credentials: 'include' });
+        const j = await r.json();
+        if (j && j.logged_in) {
+          // already authenticated — show UI
+          document.getElementById('adminUI').style.display = 'block';
+          document.getElementById('adminLoginMsg').textContent = 'Signed in as '+(j.username||'');
+          loggedIn = true;
+          await loadItems();
+        } else {
+          // redirect to separate login page
+          window.location.href = 'login.html';
+        }
+      }catch(e){
+        console.error('Auth check failed', e);
+        window.location.href = 'login.html';
+      }
+    })();
   </script>
 </body>
 </html>

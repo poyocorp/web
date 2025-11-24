@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Login — Poyoweb Admin</title>
+  <style>
+    body{ font-family:Inter,system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background:#f6f7fb; color:#111; }
+    .wrap{ max-width:420px; margin:80px auto; }
+    .card{ background:#fff; padding:18px; border-radius:12px; box-shadow:0 10px 30px rgba(15,23,42,0.06); }
+    input{ width:100%; padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid #e6e9f0 }
+    button{ background:#2274a5; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .muted{ color:#666; font-size:13px }
+    .small{ padding:6px 8px; border-radius:6px }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Admin login</h2>
+      <p class="muted">Sign in to manage items.</p>
+      <div style="margin-top:12px">
+        <input id="username" placeholder="username" autocomplete="username">
+        <input id="password" type="password" placeholder="password" autocomplete="current-password">
+        <div style="display:flex; gap:8px; align-items:center">
+          <button id="signInBtn">Sign in</button>
+          <button id="demoFillBtn" class="small">Fill dev creds</button>
+          <div id="loginMsg" class="muted" style="margin-left:8px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('signInBtn').addEventListener('click', async ()=>{
+      const u = document.getElementById('username').value || '';
+      const p = document.getElementById('password').value || '';
+      const msg = document.getElementById('loginMsg');
+      if (!u || !p) { msg.textContent = 'Enter username and password'; return; }
+      msg.textContent = 'Signing in...';
+      try{
+        const r = await fetch('api/auth.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, password: p }), credentials: 'include' });
+        const j = await r.json();
+        if (j.ok) {
+          // Redirect back to admin
+          window.location.href = 'admin.html';
+        } else {
+          msg.textContent = j.error || 'Login failed';
+        }
+      }catch(err){ msg.textContent = err.message; }
+    });
+
+    // convenience for local dev: fill demo creds (kept simple)
+    document.getElementById('demoFillBtn').addEventListener('click', ()=>{
+      document.getElementById('username').value = 'admin';
+      document.getElementById('password').value = 'SproutPoyoCorp943/';
+      document.getElementById('loginMsg').textContent = 'Filled dev credentials (local only)';
+    });
+  </script>
+</body>
+</html>
