@@ -44,8 +44,14 @@
             ? `<img class="thumb" src="${escapeAttr(it.image)}" alt="${escapeAttr(it.title)}">`
             : '';
 
-          const sourceBtn = it.source
+          const hasSource = it.source != null && String(it.source).trim() !== '';
+          const sourceBtn = hasSource
             ? `<a class="source" href="${escapeAttr(it.source)}" target="_blank" rel="noopener noreferrer">Source Code</a>`
+            : '';
+
+          const hasUrl = it.url != null && String(it.url).trim() !== '';
+          const visitBtn = hasUrl
+            ? `<a class="visit" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>`
             : '';
 
           card.innerHTML = `
@@ -58,7 +64,7 @@
             <div class="meta">
               <div class="username">${escapeHtml(it.username)}</div>
               ${sourceBtn}
-              <a class="visit" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer">Visit ↗</a>
+              ${visitBtn}
             </div>
           `;
 
