@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Credits</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;800&display=swap');
+    @font-face {
+      font-family: 'KirbyFont';
+      src: url('fonts/kirb.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    :root{ --bg:#f7dc59; --text:#111; --muted:#6b6b6b }
+    body{ margin:0; background:var(--bg); color:var(--text); font-family:'Open Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial }
+    .wrap{ max-width:1100px; margin:22px auto; padding:20px }
+    header{ text-align:center; margin:8px 0 28px }
+    h1{ font-family: 'KirbyFont', 'Open Sans', sans-serif; font-weight:800; font-size:72px; margin:0; font-style:italic }
+    .cols{ display:block; }
+    .center{ display:flex; justify-content:center }
+    .credits-list{ max-width:760px; margin:0 auto; padding:0 12px }
+    .credit{ display:flex; gap:12px; align-items:center; margin:18px 0; font-size:22px }
+    .credit strong{ font-weight:800; margin-right:6px; font-family: 'Open Sans', system-ui, sans-serif }
+    .muted{ color:var(--muted); font-size:15px }
+    .hamburger{ position:fixed; left:20px; top:18px; width:36px; height:36px }
+    @media (max-width:800px){ .cols{ grid-template-columns:1fr; } h1{ font-size:48px } .credit{ font-size:18px } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hamburger" aria-hidden="true">☰</div>
+    <header>
+      <h1>Credits</h1>
+    </header>
+
+    <main class="cols" role="main">
+      <div class="center">
+        <div class="credits-list">
+          <div class="credit"><strong>@dante.dog</strong><span class="muted">- Making The Website</span></div>
+          <div class="credit"><strong>@coll147</strong><span class="muted">- Making The website and the wallpaper</span></div>
+          <div class="credit"><strong>@beachballs</strong><span class="muted">- Unboxing video</span></div>
+          <div class="credit"><strong>Some Random Website On Google</strong><span class="muted">- Air Riders Font</span></div>
+          <div class="credit"><strong>Nintendo</strong><span class="muted">- Kirby</span></div>
+          <div class="credit"><strong>Itsudemo</strong><span class="muted">- Making Sprout Poyo</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
