@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin — Poyoweb</title>
+  <style>
+    :root{ --bg:#f6f7fb; --card:#fff; --accent:#2274a5; --danger:#e05858 }
+    body{ font-family:Inter,system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); margin:0; color:#111 }
+    .wrap{ max-width:1100px; margin:26px auto; padding:20px }
+    .row{ display:flex; gap:12px; align-items:center }
+    .card{ background:var(--card); border-radius:10px; padding:16px; box-shadow:0 8px 20px rgba(15,23,42,0.06); }
+    h1{ margin:0 0 12px }
+    input, textarea{ padding:8px 10px; border-radius:8px; border:1px solid #e6e9f0 }
+    textarea{ min-height:80px }
+    button{ background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
+    .danger{ background:var(--danger) }
+    .list{ margin-top:12px }
+    .item{ display:flex; justify-content:space-between; gap:12px; padding:10px; border-bottom:1px solid #f0f2f7 }
+    .muted{ color:#666 }
+    .small{ padding:6px 8px; border-radius:6px; border:none; cursor:pointer }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+        <h1>Admin (static editor)</h1>
+        <p class="muted">This is a client-only editor. It loads <code>data/stuff.json</code>, lets you edit items in the browser, and download an updated JSON file to upload to your server (FTP/file manager).</p>
+
+        <section style="margin-top:12px">
+          <h3>Add Item</h3>
+          <div class="row">
+            <input id="title" placeholder="Title">
+            <input id="user" placeholder="@username">
+            <input id="url" placeholder="https://...">
+            <button id="addBtn">Add</button>
+          </div>
+          <div style="margin-top:8px"><textarea id="desc" placeholder="Short description"></textarea></div>
+        </section>
+
+        <section style="margin-top:14px">
+          <div class="row" style="align-items:center;gap:8px;margin-bottom:10px">
+            <button id="downloadBtn" class="small">Download JSON</button>
+            <label style="display:inline-block;" class="small">Upload JSON <input id="uploadFile" type="file" accept="application/json" style="display:none"></label>
+            <button id="reloadBtn" class="small">Reload from server</button>
+          </div>
+          <div class="list" id="itemsList"></div>
+        </section>
+      </div>
+  </div>
+
+  <script>
+    let items = [];
+    // Client-side admin password hash (SHA-256 hex). Change this value if you want a different password.
+    // Current default matches the password: SproutPoyoCorp943/
+    const ADMIN_PW_HASH = '6c75ab93850db9a5e5c3e19869f96dc3ffadbbc9a4f58dc54ddd2a6be958204c';
+
+    async function loadItems(){
+      try{
+        const r = await fetch('data/stuff.json', {cache:'no-store'});
+        items = await r.json();
+      }catch(e){ items = []; }
+      renderItems();
+    }
+
+    function renderItems(){
+      const list = document.getElementById('itemsList'); list.innerHTML = '';
+      items.forEach((it, idx) =>{
+        const el = document.createElement('div'); el.className='item';
+        el.innerHTML = `<div><strong>${escapeHtml(it.title)}</strong><div class="muted">${escapeHtml(it.description)}</div></div><div><button class="small" data-idx="${idx}" onclick="edit(${idx})">Edit</button> <button class="small danger" onclick="del(${idx})">Delete</button></div>`;
+        list.appendChild(el);
+      });
+    }
+
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    document.getElementById('addBtn').addEventListener('click', ()=>{
+      const title = document.getElementById('title').value.trim();
+      if(!title) return alert('Title required');
+      const item = { id: Date.now(), title, description: document.getElementById('desc').value||'', username: document.getElementById('user').value||'', url: document.getElementById('url').value||'' };
+      items.push(item); renderItems();
+    });
+
+    // --- simple client-side login ---
+    function buf2hex(buffer){ return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+    async function sha256hex(msg){ const enc = new TextEncoder(); const buf = await crypto.subtle.digest('SHA-256', enc.encode(msg)); return buf2hex(buf); }
+
+    async function tryLogin(password){
+      const h = await sha256hex(password);
+      return h === ADMIN_PW_HASH;
+    }
+
+    // Insert login UI above editor
+    const wrap = document.querySelector('.card');
+    const loginBox = document.createElement('div');
+    loginBox.style.marginBottom = '12px';
+    loginBox.innerHTML = `<div style="margin-bottom:8px"><input id="adminPassInput" type="password" placeholder="Admin password"> <button id="adminLoginBtn" class="small">Unlock</button></div><div id="adminLoginMsg" class="muted"></div>`;
+    wrap.insertBefore(loginBox, wrap.firstChild);
+    document.getElementById('adminLoginBtn').addEventListener('click', async ()=>{
+      const p = document.getElementById('adminPassInput').value || '';
+      if (!p) { document.getElementById('adminLoginMsg').textContent = 'Enter password'; return; }
+      const ok = await tryLogin(p);
+      if (ok) { loginBox.style.display='none'; document.getElementById('downloadBtn').disabled = false; document.getElementById('uploadFile').disabled = false; document.getElementById('addBtn').disabled = false; document.getElementById('reloadBtn').disabled = false; document.getElementById('adminLoginMsg').textContent = ''; }
+      else { document.getElementById('adminLoginMsg').textContent = 'Invalid password'; }
+    });
+
+    // Disable editor controls until unlocked
+    document.getElementById('downloadBtn').disabled = true;
+    document.getElementById('uploadFile').disabled = true;
+    document.getElementById('addBtn').disabled = true;
+    document.getElementById('reloadBtn').disabled = false; // allow reload without auth
+
+    function del(idx){ if (!confirm('Delete item?')) return; items.splice(idx,1); renderItems(); }
+
+    function edit(idx){ const it = items[idx]; if(!it) return; const title = prompt('Title', it.title); if(title===null) return; const desc = prompt('Description', it.description); if(desc===null) return; const user = prompt('Username', it.username); if(user===null) return; const url = prompt('URL', it.url); if(url===null) return; items[idx] = { ...it, title, description: desc, username: user, url }; renderItems(); }
+
+    document.getElementById('downloadBtn').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'stuff.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('uploadFile').addEventListener('change', async (e)=>{
+      const f = e.target.files[0]; if(!f) return; const text = await f.text(); try{ const parsed = JSON.parse(text); if(!Array.isArray(parsed)) throw new Error('Expected array'); items = parsed; renderItems(); alert('Loaded JSON into editor. To persist to server, download and upload to server path `data/stuff.json`.'); }catch(err){ alert('Invalid JSON: '+err.message); }
+    });
+
+    document.getElementById('reloadBtn').addEventListener('click', ()=>loadItems());
+
+    loadItems();
+  </script>
+</body>
+</html>
