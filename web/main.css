@@ -16,6 +16,10 @@
 /* ----------------------------------------------------
    1. General Styles
 ---------------------------------------------------- */
+* {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -642,4 +646,47 @@ body.menu-open .open-btn {
     .video-container {
         margin-bottom: 18px;
     }
+}
+
+/* ----------------------------------------------------
+   8. SproutTube Page Styles
+---------------------------------------------------- */
+body.credits-body {
+    background: #ffe96b;  
+    margin: 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+.wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+header h1 {
+    font-family: 'KirbyFont', sans-serif;
+    font-size: 50px;
+    margin-top: 20px;
+    color: #000;
+}
+
+.cols .center {
+    display: flex;
+    justify-content: center;
+}
+
+.credits-list {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.credit {
+    margin: 10px 0;
+    font-size: 20px;
+}
+
+.credit .muted {
+    color: #444;
+    margin-left: 6px;
 }
