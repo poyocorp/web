@@ -1,8 +1,10 @@
-@@ -10,31 +10,55 @@ jobs:
+name: CI/CD
+
+jobs:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@main
         uses: actions/checkout@v4
 
       - name: Check if package-lock.json exists
@@ -11,10 +13,9 @@
             echo "package-lock.json not found, running npm install to generate it."
             npm install
           fi
+
       - name: Install dependencies
         run: npm ci
-      - name: Build dependencies
-        continue-on-error: true  # Prevents failure if package-lock.json is missing
 
       - name: Build project
         run: npm run build
@@ -23,41 +24,35 @@
         run: ls -la dist
 
       - name: Archive production artifact
-        uses: actions/upload-artifact@main
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist
-          retention-days: 5  # Ensures artifact doesn't expire quickly
+          retention-days: 5
 
   deploy:
     name: Deploy 🚀
     needs: build
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - name: Checkout repository
-        uses: actions/checkout@main
         uses: actions/checkout@v4
 
-      - name: List artifacts before download (debugging step)
+      - name: List workspace before download (debugging)
         run: ls -la
 
       - name: Download artifact
-        uses: actions/download-artifact@main
         uses: actions/download-artifact@v4
-        with: 
+        with:
           name: dist
           path: dist
 
-      - name: List dist directory after download (debugging step)
+      - name: List dist directory after download (debugging)
         run: ls -la dist
 
       - name: Sync files to hosting
         uses: SamKirkland/FTP-Deploy-Action@4.0.0
-        with: 
-          server: ftp.enterflash.com
-          username: testcicd@enterflash.com
-          password: ${{ secrets.ftp_password }}
+        with:
           server: ftp.eportal.pitesindh.edu.pk
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
