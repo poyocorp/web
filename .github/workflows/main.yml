@@ -15,7 +15,7 @@ jobs:
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.0.0
         with:
-          server: ftp.yourserver.com
+          server: sproutpoyo.com
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./  # Make sure this is a folder and ends with /
