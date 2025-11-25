@@ -86,6 +86,35 @@
                 window.location.href = "web/secret.html";
             }
         });
+
+        // If an admin cookie is present, show Admin link in sidebar
+        function getCookie(name) {
+            const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return v ? decodeURIComponent(v.pop()) : null;
+        }
+
+        (function addAdminLinkIfCookie() {
+            try {
+                var a = getCookie('sprout_admin');
+                if (a) {
+                    const nav = document.querySelector('.nav-links');
+                    if (nav) {
+                        // only add once
+                        if (!nav.querySelector('.admin-link')) {
+                            const li = document.createElement('li');
+                            const anchor = document.createElement('a');
+                            anchor.href = 'admin.php';
+                            anchor.textContent = 'Admin';
+                            anchor.className = 'admin-link';
+                            anchor.style.color = '#006400';
+                            li.appendChild(anchor);
+                            // put admin at the top of the nav links
+                            if (nav.prepend) nav.prepend(li); else nav.insertBefore(li, nav.firstChild);
+                        }
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        })();
     </script>
 
 </body>
