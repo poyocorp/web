@@ -1,64 +1,25 @@
-name: CI/CD
+name: Deploy PHP Website
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Check if package-lock.json exists
-        run: |
-          if [ ! -f package-lock.json ]; then
-            echo "package-lock.json not found, running npm install to generate it."
-            npm install
-          fi
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: List dist directory (debugging step)
-        run: ls -la dist
-
-      - name: Archive production artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
-          retention-days: 5
-
   deploy:
-    name: Deploy 🚀
-    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: List workspace before download (debugging)
+      - name: List files (debug)
         run: ls -la
 
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-
-      - name: List dist directory after download (debugging)
-        run: ls -la dist
-
-      - name: Sync files to hosting
+      - name: Upload to FTP
         uses: SamKirkland/FTP-Deploy-Action@4.0.0
         with:
           server: ftp.eportal.pitesindh.edu.pk
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: .
+          server-dir: .
