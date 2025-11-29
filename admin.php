@@ -375,9 +375,10 @@ $dbError = '';
 $files = [
     'sprouttube' => __DIR__ . '/data/sprouttube.json',
     'stuff' => __DIR__ . '/data/stuff.json',
+    'photography' => __DIR__ . '/data/photography.json',
 ];
 
-$view = (isset($_REQUEST['view']) && in_array($_REQUEST['view'], ['sprouttube','stuff','admins'])) ? $_REQUEST['view'] : 'sprouttube';
+$view = (isset($_REQUEST['view']) && in_array($_REQUEST['view'], ['sprouttube','stuff','photography','admins'])) ? $_REQUEST['view'] : 'sprouttube';
 
 // Handle CRUD actions (only for logged in users)
 // Also handle admin-account management when logged-in user is a superadmin
@@ -401,15 +402,43 @@ if ($logged) {
             $missing = [];
             if ($title === '') $missing[] = 'Title';
             if ($description === '') $missing[] = 'Description';
-            // Username optional for sprouttube (we can auto-fetch it); required for other lists
-            if ($target !== 'sprouttube' && $username === '') $missing[] = 'Username';
-            if ($url === '') $missing[] = 'URL';
-            // Image is required for non-sprouttube entries
-            if ($target !== 'sprouttube' && $image === '') $missing[] = 'Image';
+            // Username optional for sprouttube and photography; required for stuff
+            if ($target === 'stuff' && $username === '') $missing[] = 'Username';
+            // URL required for sprouttube and stuff, not for photography
+            if ($target !== 'photography' && $url === '') $missing[] = 'URL';
+            // Image is required for stuff and photography (unless uploaded)
+            if (($target === 'stuff' || $target === 'photography') && $image === '' && empty($_FILES['image_upload']['tmp_name'])) $missing[] = 'Image';
 
             if (!empty($missing)) {
                 $error = 'Missing required fields: ' . implode(', ', $missing);
             } else {
+                // Handle image upload
+                if (!empty($_FILES['image_upload']['tmp_name'])) {
+                    $uploadDir = __DIR__ . '/assets/uploads';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    
+                    $fileInfo = pathinfo($_FILES['image_upload']['name']);
+                    $ext = strtolower($fileInfo['extension'] ?? 'jpg');
+                    $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                    
+                    if (in_array($ext, $allowedExts)) {
+                        $safeName = preg_replace('/[^a-z0-9_-]/', '-', strtolower($fileInfo['filename']));
+                        $uniqueName = $safeName . '-' . time() . '.' . $ext;
+                        $uploadPath = $uploadDir . '/' . $uniqueName;
+                        
+                        if (move_uploaded_file($_FILES['image_upload']['tmp_name'], $uploadPath)) {
+                            $image = 'assets/uploads/' . $uniqueName;
+                        } else {
+                            $error = 'Failed to upload image.';
+                        }
+                    } else {
+                        $error = 'Invalid image format. Allowed: JPG, PNG, GIF, WebP';
+                    }
+                }
+                
+                if (!$error) {
                 $entry = [
                     'title' => $title,
                     'description' => $description,
@@ -451,6 +480,14 @@ if ($logged) {
                         save_json_file($path, array_values($list));
                         $flash = 'Entry added.';
                         }
+                    
+                    // Auto-generate photography pages
+                    if ($target === 'photography') {
+                        $genScript = __DIR__ . '/generate_photo_pages.php';
+                        if (file_exists($genScript)) {
+                            @exec("php " . escapeshellarg($genScript) . " 2>&1", $output, $retval);
+                        }
+                    }
 
                 // After successful save, redirect back to the target view so we don't fall back to default
                 if (!$error) {
@@ -458,8 +495,38 @@ if ($logged) {
                     exit;
                 }
                 }
+                }
             }
         }
+    }
+
+    // AJAX image upload for photography: returns JSON with uploaded URL
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_image'])) {
+        header('Content-Type: application/json');
+        $resp = [ 'ok' => false, 'error' => '', 'url' => null ];
+        if (empty($_FILES['image_upload']['tmp_name'])) {
+            $resp['error'] = 'No file uploaded.';
+            echo json_encode($resp); exit;
+        }
+        $uploadDir = __DIR__ . '/assets/uploads';
+        if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0755, true); }
+        $fileInfo = pathinfo($_FILES['image_upload']['name']);
+        $ext = strtolower($fileInfo['extension'] ?? '');
+        $allowedExts = ['jpg','jpeg','png','gif','webp'];
+        if (!in_array($ext, $allowedExts)) {
+            $resp['error'] = 'Invalid image format.';
+            echo json_encode($resp); exit;
+        }
+        $safeName = preg_replace('/[^a-z0-9_-]/','-', strtolower($fileInfo['filename'] ?? 'image'));
+        $uniqueName = $safeName . '-' . time() . '.' . $ext;
+        $dest = $uploadDir . '/' . $uniqueName;
+        if (!move_uploaded_file($_FILES['image_upload']['tmp_name'], $dest)) {
+            $resp['error'] = 'Failed to move upload.';
+            echo json_encode($resp); exit;
+        }
+        $resp['ok'] = true;
+        $resp['url'] = 'assets/uploads/' . $uniqueName;
+        echo json_encode($resp); exit;
     }
 
     // Admin management (superadmins only)
@@ -645,6 +712,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
         <div class="tabs" style="display:flex;align-items:center;gap:8px">
             <a class="tab <?php echo $view==='sprouttube'? 'active':'';?>" href="?view=sprouttube">SproutTube</a>
             <a class="tab <?php echo $view==='stuff'? 'active':'';?>" href="?view=stuff">Stuff</a>
+            <a class="tab <?php echo $view==='photography'? 'active':'';?>" href="?view=photography">Photography</a>
             <?php if ($is_superadmin): ?>
                 <a class="tab <?php echo $view==='admins'? 'active':'';?>" href="?view=admins">Admin Account</a>
             <?php endif; ?>
@@ -796,7 +864,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                         <h3 id="modalTitle"></h3>
                         <button onclick="closeModal()" class="tab">Close</button>
                     </div>
-                    <form method="post" id="entryForm">
+                    <form method="post" id="entryForm" enctype="multipart/form-data">
                         <input type="hidden" name="view" value="<?php echo e($view); ?>">
                         <input type="hidden" name="target" value="<?php echo e($view); ?>">
                         <input type="hidden" name="id" id="entry_id" value="<?php echo e($editId ?? ''); ?>">
@@ -823,6 +891,28 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                                     <input type="text" name="videoId" id="videoid_field" value="<?php echo val($editVals,'videoId'); ?>">
                                 </div>
                                 <input type="hidden" name="url" id="url_field" value="<?php echo val($editVals,'url'); ?>">
+                            <?php elseif ($view === 'photography'): ?>
+                                <div class="row">
+                                    <label>Title *</label>
+                                    <input type="text" name="title" id="title_field" value="<?php echo val($editVals,'title'); ?>" required>
+                                </div>
+                                <div class="row">
+                                    <label>Description *</label>
+                                    <textarea name="description" id="desc_field" rows="3" required><?php echo val($editVals,'description'); ?></textarea>
+                                </div>
+                                <div class="row">
+                                    <label>Username (optional)</label>
+                                    <input type="text" name="username" id="user_field" value="<?php echo val($editVals,'username'); ?>">
+                                </div>
+                                <div class="row">
+                                    <label>Image URL</label>
+                                    <input type="text" name="image" id="image_field" value="<?php echo val($editVals,'image'); ?>">
+                                </div>
+                                <div class="row">
+                                    <label>Or Upload Image *</label>
+                                    <input type="file" name="image_upload" id="image_upload_field" accept="image/jpeg,image/png,image/gif,image/webp">
+                                    <small style="color:#666;font-size:0.85rem;margin-top:4px;display:block">Allowed: JPG, PNG, GIF, WebP</small>
+                                </div>
                             <?php else: ?>
                                 <div class="row">
                                     <label>Title *</label>
@@ -992,6 +1082,28 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                     if (lf && lf.value.trim()) {
                         handleLinkInput();
                     }
+                });
+            }
+
+            // Autofill image URL when uploading (photography view)
+            var uploadInput = document.getElementById('image_upload_field');
+            var imageUrlInput = document.getElementById('image_field');
+            if (uploadInput && imageUrlInput) {
+                uploadInput.addEventListener('change', function(){
+                    if (!uploadInput.files || uploadInput.files.length === 0) return;
+                    var fd = new FormData();
+                    fd.append('upload_image', '1');
+                    fd.append('image_upload', uploadInput.files[0]);
+                    fetch('admin.php', { method: 'POST', body: fd })
+                        .then(function(r){ return r.json(); })
+                        .then(function(json){
+                            if (json && json.ok && json.url) {
+                                imageUrlInput.value = json.url;
+                            } else {
+                                alert((json && json.error) ? json.error : 'Upload failed');
+                            }
+                        })
+                        .catch(function(){ alert('Upload error'); });
                 });
             }
         });
