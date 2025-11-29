@@ -365,11 +365,11 @@ function migrate_json_to_db_global($table, $jsonPath) {
     return ['imported'=>$imported,'skipped'=>count($items)-$imported];
 }
 
-// Attempt DB init (use separate DB credentials file if present)
-init_db($dbCreds, $dbError);
-if ($db_mode !== 'json') {
-    try { db_ensure_tables(); } catch (Exception $ex) { $dbError = $ex->getMessage(); }
-}
+// Force JSON-only mode (do not use any DB). DB credentials ignored.
+$db_mode = 'json';
+$pdo = null;
+$mysqli = null;
+$dbError = '';
 
 // Data paths
 $files = [
@@ -377,7 +377,7 @@ $files = [
     'stuff' => __DIR__ . '/data/stuff.json',
 ];
 
-$view = isset($_GET['view']) && in_array($_GET['view'], ['sprouttube','stuff','admins']) ? $_GET['view'] : 'sprouttube';
+$view = (isset($_REQUEST['view']) && in_array($_REQUEST['view'], ['sprouttube','stuff','admins'])) ? $_REQUEST['view'] : 'sprouttube';
 
 // Handle CRUD actions (only for logged in users)
 // Also handle admin-account management when logged-in user is a superadmin
@@ -396,13 +396,16 @@ if ($logged) {
             $url = trim($_POST['url'] ?? '');
             $source = trim($_POST['source'] ?? '');
             $image = trim($_POST['image'] ?? '');
+            $videoId = trim($_POST['videoId'] ?? $_POST['link'] ?? '');
 
             $missing = [];
             if ($title === '') $missing[] = 'Title';
             if ($description === '') $missing[] = 'Description';
-            if ($username === '') $missing[] = 'Username';
+            // Username optional for sprouttube (we can auto-fetch it); required for other lists
+            if ($target !== 'sprouttube' && $username === '') $missing[] = 'Username';
             if ($url === '') $missing[] = 'URL';
-            if ($image === '') $missing[] = 'Image';
+            // Image is required for non-sprouttube entries
+            if ($target !== 'sprouttube' && $image === '') $missing[] = 'Image';
 
             if (!empty($missing)) {
                 $error = 'Missing required fields: ' . implode(', ', $missing);
@@ -410,27 +413,28 @@ if ($logged) {
                 $entry = [
                     'title' => $title,
                     'description' => $description,
-                    'username' => $username,
+                    'username' => $username ?: null,
                     'url' => $url,
                     'source' => $source ?: null,
-                    'image' => $image,
+                    'image' => $image ?: null,
+                    'videoId' => $videoId ?: null,
                     'updated_at' => date('c'),
                 ];
 
-                if ($db_mode !== 'json') {
-                    // Use DB
-                    if (isset($_POST['id']) && $_POST['id'] !== '') {
-                        $id = (int)$_POST['id'];
-                        if (db_update_global($target, $id, $entry)) {
-                            $flash = 'Entry updated (DB).';
+                        if ($db_mode !== 'json') {
+                            // Use DB
+                            if (isset($_POST['id']) && $_POST['id'] !== '') {
+                                $id = (int)$_POST['id'];
+                                if (db_update_global($target, $id, $entry)) {
+                                    $flash = 'Entry updated (DB).';
+                                } else {
+                                    $error = 'Failed to update DB entry.';
+                                }
+                            } else {
+                                db_insert_global($target, $entry);
+                                $flash = 'Entry added (DB).';
+                            }
                         } else {
-                            $error = 'Failed to update DB entry.';
-                        }
-                    } else {
-                        db_insert_global($target, $entry);
-                        $flash = 'Entry added (DB).';
-                    }
-                } else {
                     // Fallback to JSON files
                     $list = load_json_file($path);
                     if (isset($_POST['id']) && $_POST['id'] !== '') {
@@ -446,7 +450,13 @@ if ($logged) {
                         $list[] = $entry;
                         save_json_file($path, array_values($list));
                         $flash = 'Entry added.';
-                    }
+                        }
+
+                // After successful save, redirect back to the target view so we don't fall back to default
+                if (!$error) {
+                    header('Location: admin.php?view=' . urlencode($target));
+                    exit;
+                }
                 }
             }
         }
@@ -459,7 +469,7 @@ if ($logged) {
             $newuser = trim($_POST['new_user'] ?? '');
             $newpass = $_POST['new_pass'] ?? '';
             $newsuper = isset($_POST['new_super']) ? true : false;
-            if ($newuser === '' || $newpass === '') {
+                if ($newuser === '' || $newpass === '') {
                 $error = 'Admin username and password are required.';
             } else {
                 $alist = load_admins_file();
@@ -472,7 +482,7 @@ if ($logged) {
                     $flash = 'Admin created.';
                     // refresh in-memory list
                     $admins = $alist;
-                    header('Location: admin.php#admins'); exit;
+                    header('Location: admin.php?view=admins'); exit;
                 }
             }
         }
@@ -501,7 +511,7 @@ if ($logged) {
                         save_admins_file($alist);
                         $admins = $alist;
                         $flash = 'Admin updated.';
-                        header('Location: admin.php#admins'); exit;
+                        header('Location: admin.php?view=admins'); exit;
                     }
                 } else { $error = 'Admin not found.'; }
             }
@@ -522,7 +532,7 @@ if ($logged) {
                     // Ensure at least one superadmin remains
                     $hasSuper = false; foreach ($alist as $aa) { if (!empty($aa['superadmin'])) { $hasSuper = true; break; } }
                     if (! $hasSuper) { $error = 'Cannot delete this admin: at least one superadmin must remain.'; }
-                    else { save_admins_file($alist); $admins = $alist; $flash = 'Admin deleted.'; header('Location: admin.php#admins'); exit; }
+                    else { save_admins_file($alist); $admins = $alist; $flash = 'Admin deleted.'; header('Location: admin.php?view=admins'); exit; }
                 } else { $error = 'Admin not found.'; }
             }
         }
@@ -543,7 +553,7 @@ if ($logged) {
                 // ensure at least one superadmin remains
                 $hasSuper = false; foreach ($alist as $aa) { if (!empty($aa['superadmin'])) { $hasSuper = true; break; } }
                 if (! $hasSuper) { $error = 'Operation would remove all superadmins; aborted.'; }
-                else { save_admins_file($alist); $admins = $alist; $flash = 'Superadmin flag toggled.'; header('Location: admin.php#admins'); exit; }
+                else { save_admins_file($alist); $admins = $alist; $flash = 'Superadmin flag toggled.'; header('Location: admin.php?view=admins'); exit; }
             } else { $error = 'Admin not found.'; }
         }
     }
@@ -617,6 +627,12 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
         input[type=text],textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #eee}
         .small{font-size:13px;color:#666}
         .danger{background:#ffdddd;color:#8a1f1f;padding:8px;border-radius:8px}
+        /* Admin accounts table spacing improvements */
+        #admins table { width:100%; border-collapse: separate; border-spacing: 0 10px; }
+        #admins table thead tr th { text-align:left; padding:8px 12px; }
+        #admins table tbody tr { background: #fff; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.03); }
+        #admins table tbody tr td { padding:12px; vertical-align:middle; }
+        #admins table tbody tr td .tab { margin-right:6px; }
     </style>
 </head>
 <body>
@@ -630,7 +646,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
             <a class="tab <?php echo $view==='sprouttube'? 'active':'';?>" href="?view=sprouttube">SproutTube</a>
             <a class="tab <?php echo $view==='stuff'? 'active':'';?>" href="?view=stuff">Stuff</a>
             <?php if ($is_superadmin): ?>
-                <a class="tab" href="#admins">Admin Account</a>
+                <a class="tab <?php echo $view==='admins'? 'active':'';?>" href="?view=admins">Admin Account</a>
             <?php endif; ?>
             <?php if ($logged): ?>
                 <a class="tab logout-btn" href="?action=logout">Logout</a>
@@ -687,7 +703,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
 
             <div class="list">
                         <div style="margin-bottom:12px">
-                            <button class="btn" onclick="openModalForAdd()">Add Entry</button>
+                            <button type="button" id="addEntryBtn" class="btn">Add Entry</button>
                         </div>
                 <?php if (empty($entries)): ?>
                     <div class="small">No entries yet.</div>
@@ -721,6 +737,24 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                     $editing = false;
                     $editVals = ['title'=>'','description'=>'','username'=>'','url'=>'','source'=>'','image'=>''];
                     $editId = '';
+                    // Admin edit defaults (initialize so template won't warn)
+                    $editingAdmin = false;
+                    $adminEditVals = ['user'=>'','password'=>'','superadmin'=>false];
+                    $adminEditUser = '';
+
+                    // If a GET editadmin action is present (navigating to edit an admin), prefill values
+                    if ($is_superadmin && isset($_GET['action']) && $_GET['action'] === 'editadmin' && isset($_GET['user'])) {
+                        $u = $_GET['user'];
+                        $alist = load_admins_file();
+                        foreach ($alist as $a) {
+                            if (($a['user'] ?? '') === $u) {
+                                $editingAdmin = true;
+                                $adminEditVals = ['user'=>$a['user'],'password'=>$a['password'],'superadmin'=>!empty($a['superadmin'])];
+                                $adminEditUser = $a['user'];
+                                break;
+                            }
+                        }
+                    }
                     if (isset($_GET['action']) && $_GET['action']==='edit' && isset($_GET['id'])) {
                         $id = (int)$_GET['id'];
                         if ($db_mode !== 'json') {
@@ -763,6 +797,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                         <button onclick="closeModal()" class="tab">Close</button>
                     </div>
                     <form method="post" id="entryForm">
+                        <input type="hidden" name="view" value="<?php echo e($view); ?>">
                         <input type="hidden" name="target" value="<?php echo e($view); ?>">
                         <input type="hidden" name="id" id="entry_id" value="<?php echo e($editId ?? ''); ?>">
                         <div id="formFields">
@@ -841,13 +876,13 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                                     <td><?php echo e($a['user'] ?? ''); ?></td>
                                     <td style="text-align:center"><?php echo !empty($a['superadmin'])? 'Yes':'No'; ?></td>
                                     <td>
-                                        <a class="tab" href="?action=editadmin&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Edit</a>
+                                        <a class="tab" href="?view=admins&action=editadmin&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Edit</a>
                                         <?php if (($a['user'] ?? '') !== $current_user): ?>
-                                            <a class="tab" href="?action=deladmin&user=<?php echo urlencode($a['user'] ?? ''); ?>" onclick="return confirm('Delete admin <?php echo e($a['user'] ?? ''); ?>?')">Delete</a>
+                                            <a class="tab" href="?view=admins&action=deladmin&user=<?php echo urlencode($a['user'] ?? ''); ?>" onclick="return confirm('Delete admin <?php echo e($a['user'] ?? ''); ?>?')">Delete</a>
                                         <?php else: ?>
                                             <span class="small">(current)</span>
                                         <?php endif; ?>
-                                        <a class="tab" href="?action=togglesuper&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Toggle Super</a>
+                                        <a class="tab" href="?view=admins&action=togglesuper&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Toggle Super</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -858,6 +893,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                     <div style="margin-top:18px">
                         <h4><?php echo $editingAdmin ? 'Edit Admin' : 'Create New Admin'; ?></h4>
                         <form method="post">
+                            <input type="hidden" name="view" value="admins">
                             <?php if ($editingAdmin): ?>
                                 <input type="hidden" name="edit_user" value="<?php echo e($adminEditUser); ?>">
                             <?php endif; ?>
@@ -895,8 +931,71 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
             <?php endif; ?>
 
         <?php endif; ?>
+
+        <?php endif; ?>
     </div>
 </div>
+
+    <script>
+        // Modal helpers
+        function openModalForAdd(){
+            document.getElementById('modalTitle').textContent = 'Add Entry';
+            document.getElementById('entry_id').value = '';
+            // clear fields
+            var ids = ['title_field','desc_field','user_field','url_field','videoid_field','image_field','source_field','link_field'];
+            ids.forEach(function(id){ var el = document.getElementById(id); if(el) el.value = ''; });
+            document.getElementById('entryModal').style.display = 'block';
+        }
+        function closeModal(){ var m=document.getElementById('entryModal'); if(m) m.style.display = 'none'; }
+
+        // Open modal on edit when server set $editing
+        <?php if (!empty($editing) && $editing): ?>
+        document.addEventListener('DOMContentLoaded', function(){
+            document.getElementById('modalTitle').textContent = 'Edit Entry';
+            var eid = '<?php echo e($editId); ?>';
+            if(document.getElementById('entry_id')) document.getElementById('entry_id').value = eid;
+            var m=document.getElementById('entryModal'); if(m) m.style.display = 'block';
+        });
+        <?php endif; ?>
+
+        // sprouttube: extract YouTube id and fetch title/author via oEmbed
+        function extractYouTubeId(url){
+            if(!url) return '';
+            var m = url.match(/(?:v=|\/videos\/|embed\/|youtu\.be\/)([A-Za-z0-9_-]{6,11})/);
+            return m ? m[1] : '';
+        }
+        function handleLinkInput(){
+            var lf = document.getElementById('link_field'); if(!lf) return;
+            var val = lf.value.trim(); if(!val) return;
+            var id = extractYouTubeId(val);
+            if(id){
+                var urlField = document.getElementById('url_field'); if(urlField) urlField.value = 'https://youtu.be/'+id;
+                var vidField = document.getElementById('videoid_field'); if(vidField) vidField.value = id;
+                var oembed = 'https://www.youtube.com/oembed?url=' + encodeURIComponent(val) + '&format=json';
+                fetch(oembed).then(function(r){ if(!r.ok) throw r; return r.json(); }).then(function(data){
+                    if(data.title){ var t = document.getElementById('title_field'); if(t && !t.value) t.value = data.title; }
+                    if(data.author_name){ var u = document.getElementById('user_field'); if(u && !u.value) u.value = data.author_name; }
+                }).catch(function(){});
+            }
+        }
+        document.addEventListener('input', function(e){ if(e.target && e.target.id === 'link_field'){ handleLinkInput(); } });
+
+        // Attach click handler to Add Entry button (fallback for inline onclick)
+        document.addEventListener('DOMContentLoaded', function(){
+            var b = document.getElementById('addEntryBtn');
+            if (b) b.addEventListener('click', function(e){ e.preventDefault(); openModalForAdd(); });
+            // Ensure before submit the url/videoId are set from link if present
+            var form = document.getElementById('entryForm');
+            if (form) {
+                form.addEventListener('submit', function(ev){
+                    var lf = document.getElementById('link_field');
+                    if (lf && lf.value.trim()) {
+                        handleLinkInput();
+                    }
+                });
+            }
+        });
+    </script>
 
 </body>
 </html>
