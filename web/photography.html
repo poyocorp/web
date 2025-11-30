@@ -84,6 +84,146 @@
       color: #666;
       font-size: 1.1rem;
     }
+
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+      .stuff-container {
+        display: block !important;
+        padding: 0 !important;
+        margin: 10px auto !important;
+      }
+
+      .stuff-header {
+        padding: 20px 10px 10px;
+      }
+
+      .stuff-header > div {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .stuff-title {
+        font-size: 1.8rem;
+        padding-right: 0 !important;
+        flex: 1;
+        text-align: center;
+      }
+
+      #toggleTitles {
+        padding: 8px 16px !important;
+        font-size: 1.2rem !important;
+        right: 10px !important;
+        position: absolute !important;
+      }
+
+      .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .photo-item img {
+        height: 180px;
+      }
+
+      .photo-caption {
+        padding: 8px 12px;
+      }
+
+      .photo-title {
+        font-size: 0.95rem;
+      }
+
+      .view-hint {
+        font-size: 0.9rem;
+      }
+
+      /* Viewer modal adjustments for mobile */
+      #viewer > div {
+        width: 96% !important;
+        padding: 0 8px;
+      }
+
+      #viewer > div > div:first-child {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      #viewerClose, #toggleTitle {
+        padding: 8px 16px !important;
+        font-size: 0.9rem !important;
+      }
+
+      .stuff-title {
+        font-size: 1.5rem !important;
+      }
+
+      #viewer img {
+        max-height: 60vh !important;
+        border-radius: 8px !important;
+      }
+
+      #viewer > div > div:last-child {
+        grid-template-columns: 50px 1fr 50px !important;
+        gap: 8px !important;
+      }
+
+      #prevBtn, #nextBtn {
+        font-size: 1.5rem !important;
+        padding: 8px !important;
+      }
+
+      #viewerDescWrap {
+        margin-top: 8px !important;
+      }
+
+      #viewerDescWrap > div {
+        padding: 12px !important;
+      }
+
+      #viewerTitle {
+        font-size: 1.3rem !important;
+      }
+
+      #viewerDesc {
+        font-size: 0.95rem !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stuff-title {
+        font-size: 1.5rem;
+      }
+
+      #toggleTitles {
+        padding: 6px 12px !important;
+        font-size: 1rem !important;
+      }
+
+      .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .photo-item img {
+        height: 140px;
+      }
+
+      .photo-caption {
+        padding: 6px 10px;
+      }
+
+      .photo-title {
+        font-size: 0.85rem;
+      }
+
+      .view-hint {
+        font-size: 0.8rem;
+      }
+    }
   </style>
 </head>
 <body class="stuff-body">
@@ -152,8 +292,11 @@
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/(^-|-$)/g, '');
 
+          const imgSrc = resolveImg(photo.image);
+          console.log('Loading image:', imgSrc); // Debug log
+
           item.innerHTML = `
-            <img src="${resolveImg(photo.image)}" alt="${escapeAttr(photo.title)}">
+            <img src="${escapeAttr(imgSrc)}" alt="${escapeAttr(photo.title)}" onerror="console.error('Failed to load:', this.src); this.style.background='#ffcccc';">
             <div class="photo-caption">
               <h3 class="photo-title">${escapeHtml(photo.title)}</h3>
               <span class="view-hint">View →</span>
@@ -192,10 +335,11 @@
     function resolveImg(u){
       const url = String(u||'').trim();
       if (!url) return '';
-      if (url.startsWith('http://') || url.startsWith('https://')) return escapeAttr(url);
+      if (url.startsWith('http://') || url.startsWith('https://')) return url;
       // photography.html is under /web/, JSON paths like 'assets/uploads/...' need '../'
-      if (url.startsWith('../')) return escapeAttr(url);
-      return escapeAttr('../' + url.replace(/^\/*/, ''));
+      if (url.startsWith('../')) return url;
+      if (url.startsWith('/')) return url;
+      return '../' + url.replace(/^\/*/, '');
     }
 
     loadPhotos();
