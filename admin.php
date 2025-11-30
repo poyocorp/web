@@ -1,12 +1,42 @@
 <?php
 session_start();
 
-// Admin users file (array of admin objects: {user,password,superadmin})
+// Admin users file (array of admin objects: {user,password,permissions})
+// permissions: {sprouttube, photography, stuff, admin_accounts}
 $admin_file = __DIR__ . '/credentials.json';
 $admins = [];
 if (file_exists($admin_file)) {
     $json = file_get_contents($admin_file);
     $admins = json_decode($json, true) ?: [];
+    
+    // Auto-migrate: convert old superadmin flag to permissions
+    $needs_save = false;
+    foreach ($admins as $idx => $admin) {
+        if (isset($admin['superadmin']) && !isset($admin['permissions'])) {
+            // Migrate superadmin to all permissions
+            if ($admin['superadmin']) {
+                $admins[$idx]['permissions'] = [
+                    'sprouttube' => true,
+                    'photography' => true,
+                    'stuff' => true,
+                    'admin_accounts' => true
+                ];
+            } else {
+                // Non-superadmin gets no permissions by default
+                $admins[$idx]['permissions'] = [
+                    'sprouttube' => false,
+                    'photography' => false,
+                    'stuff' => false,
+                    'admin_accounts' => false
+                ];
+            }
+            unset($admins[$idx]['superadmin']);
+            $needs_save = true;
+        }
+    }
+    if ($needs_save) {
+        file_put_contents($admin_file, json_encode($admins, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
 }
 
 // DB credentials are read from a separate file if present
@@ -48,7 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         if ($found) {
             $_SESSION['admin'] = true;
             $_SESSION['admin_user'] = $found['user'];
-            $_SESSION['is_superadmin'] = !empty($found['superadmin']);
+            $_SESSION['permissions'] = $found['permissions'] ?? [
+                'sprouttube' => false,
+                'photography' => false,
+                'stuff' => false,
+                'admin_accounts' => false
+            ];
             // set a non-HttpOnly cookie so front-end pages can detect admin presence
             setcookie('sprout_admin', $found['user'], time() + 3600, '/');
             session_regenerate_id(true);
@@ -63,7 +98,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 // Logged-in flags and username
 $logged = !empty($_SESSION['admin']);
 $current_user = $logged ? ($_SESSION['admin_user'] ?? '') : '';
-$is_superadmin = $logged ? (!empty($_SESSION['is_superadmin'])) : false;
+$permissions = $logged ? ($_SESSION['permissions'] ?? []) : [];
+
+// Helper to check permissions
+function has_permission($perm) {
+    global $permissions;
+    return !empty($permissions[$perm]);
+}
 
 function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
@@ -378,15 +419,27 @@ $files = [
     'photography' => __DIR__ . '/data/photography.json',
 ];
 
-$view = (isset($_REQUEST['view']) && in_array($_REQUEST['view'], ['sprouttube','stuff','photography','admins'])) ? $_REQUEST['view'] : 'sprouttube';
+// Determine allowed views based on permissions
+$allowed_views = [];
+if (has_permission('sprouttube')) $allowed_views[] = 'sprouttube';
+if (has_permission('photography')) $allowed_views[] = 'photography';
+if (has_permission('stuff')) $allowed_views[] = 'stuff';
+if (has_permission('admin_accounts')) $allowed_views[] = 'admins';
 
-// Handle CRUD actions (only for logged in users)
-// Also handle admin-account management when logged-in user is a superadmin
+// Default to first allowed view, or sprouttube if none
+$default_view = !empty($allowed_views) ? $allowed_views[0] : 'sprouttube';
+$view = (isset($_REQUEST['view']) && in_array($_REQUEST['view'], $allowed_views)) ? $_REQUEST['view'] : $default_view;
+
+// Handle CRUD actions (only for logged in users with appropriate permissions)
 if ($logged) {
     // POST actions: add or save
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_entry'])) {
         $target = $_POST['target'] ?? 'sprouttube';
         if (!isset($files[$target])) { $error = 'Invalid target.'; }
+        // Check permission for this section
+        elseif ($target === 'sprouttube' && !has_permission('sprouttube')) { $error = 'Access denied to SproutTube section.'; }
+        elseif ($target === 'photography' && !has_permission('photography')) { $error = 'Access denied to Photography section.'; }
+        elseif ($target === 'stuff' && !has_permission('stuff')) { $error = 'Access denied to Stuff section.'; }
         else {
             $path = $files[$target];
 
@@ -529,13 +582,18 @@ if ($logged) {
         echo json_encode($resp); exit;
     }
 
-    // Admin management (superadmins only)
-    if ($is_superadmin) {
+    // Admin management (users with admin_accounts permission only)
+    if (has_permission('admin_accounts')) {
         // Create new admin
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_admin'])) {
             $newuser = trim($_POST['new_user'] ?? '');
             $newpass = $_POST['new_pass'] ?? '';
-            $newsuper = isset($_POST['new_super']) ? true : false;
+            $new_perms = [
+                'sprouttube' => isset($_POST['perm_sprouttube']),
+                'photography' => isset($_POST['perm_photography']),
+                'stuff' => isset($_POST['perm_stuff']),
+                'admin_accounts' => isset($_POST['perm_admin_accounts'])
+            ];
                 if ($newuser === '' || $newpass === '') {
                 $error = 'Admin username and password are required.';
             } else {
@@ -544,7 +602,7 @@ if ($logged) {
                 foreach ($alist as $a) { if (strtolower(($a['user'] ?? '')) === strtolower($newuser)) { $exists = true; break; } }
                 if ($exists) { $error = 'An admin with that username already exists.'; }
                 else {
-                    $alist[] = ['user'=>$newuser, 'password'=>$newpass, 'superadmin'=>$newsuper];
+                    $alist[] = ['user'=>$newuser, 'password'=>$newpass, 'permissions'=>$new_perms];
                     save_admins_file($alist);
                     $flash = 'Admin created.';
                     // refresh in-memory list
@@ -554,11 +612,16 @@ if ($logged) {
             }
         }
 
-        // Update existing admin (password or superadmin)
+        // Update existing admin (password or permissions)
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_admin'])) {
             $u = $_POST['edit_user'] ?? '';
             $pw = $_POST['edit_pass'] ?? null;
-            $sup = isset($_POST['edit_super']) ? true : false;
+            $edit_perms = [
+                'sprouttube' => isset($_POST['perm_sprouttube']),
+                'photography' => isset($_POST['perm_photography']),
+                'stuff' => isset($_POST['perm_stuff']),
+                'admin_accounts' => isset($_POST['perm_admin_accounts'])
+            ];
             if ($u === '') { $error = 'Invalid admin.'; }
             else {
                 $alist = load_admins_file();
@@ -566,14 +629,19 @@ if ($logged) {
                 foreach ($alist as $idx => $a) {
                     if (strtolower(($a['user'] ?? '')) === strtolower($u)) {
                         if ($pw !== null && $pw !== '') $alist[$idx]['password'] = $pw;
-                        $alist[$idx]['superadmin'] = $sup;
+                        $alist[$idx]['permissions'] = $edit_perms;
                         $found = true; break;
                     }
                 }
                 if ($found) {
-                    // prevent unsetting the last superadmin
-                    $count = 0; foreach ($alist as $aa) { if (!empty($aa['superadmin'])) $count++; }
-                    if ($count === 0) { $error = 'There must be at least one superadmin.'; }
+                    // prevent removing admin_accounts permission from last admin with it
+                    $count_admin_perm = 0; 
+                    foreach ($alist as $aa) { 
+                        if (!empty($aa['permissions']['admin_accounts'])) $count_admin_perm++; 
+                    }
+                    if ($count_admin_perm === 0) { 
+                        $error = 'There must be at least one admin with admin_accounts permission.'; 
+                    }
                     else {
                         save_admins_file($alist);
                         $admins = $alist;
@@ -596,32 +664,23 @@ if ($logged) {
                 }
                 if ($found) {
                     $alist = array_values($alist);
-                    // Ensure at least one superadmin remains
-                    $hasSuper = false; foreach ($alist as $aa) { if (!empty($aa['superadmin'])) { $hasSuper = true; break; } }
-                    if (! $hasSuper) { $error = 'Cannot delete this admin: at least one superadmin must remain.'; }
-                    else { save_admins_file($alist); $admins = $alist; $flash = 'Admin deleted.'; header('Location: admin.php?view=admins'); exit; }
+                    // Ensure at least one admin with admin_accounts permission remains
+                    $hasAdminPerm = false; 
+                    foreach ($alist as $aa) { 
+                        if (!empty($aa['permissions']['admin_accounts'])) { $hasAdminPerm = true; break; } 
+                    }
+                    if (! $hasAdminPerm) { 
+                        $error = 'Cannot delete this admin: at least one admin with admin_accounts permission must remain.'; 
+                    }
+                    else { 
+                        save_admins_file($alist); 
+                        $admins = $alist; 
+                        $flash = 'Admin deleted.'; 
+                        header('Location: admin.php?view=admins'); 
+                        exit; 
+                    }
                 } else { $error = 'Admin not found.'; }
             }
-        }
-
-        // Toggle superadmin via GET
-        if (isset($_GET['action']) && $_GET['action'] === 'togglesuper' && isset($_GET['user'])) {
-            $tuser = $_GET['user'];
-            $alist = load_admins_file();
-            $found = false;
-            foreach ($alist as $idx => $a) {
-                if (($a['user'] ?? '') === $tuser) {
-                    // flip
-                    $alist[$idx]['superadmin'] = empty($alist[$idx]['superadmin']) ? true : false;
-                    $found = true; break;
-                }
-            }
-            if ($found) {
-                // ensure at least one superadmin remains
-                $hasSuper = false; foreach ($alist as $aa) { if (!empty($aa['superadmin'])) { $hasSuper = true; break; } }
-                if (! $hasSuper) { $error = 'Operation would remove all superadmins; aborted.'; }
-                else { save_admins_file($alist); $admins = $alist; $flash = 'Superadmin flag toggled.'; header('Location: admin.php?view=admins'); exit; }
-            } else { $error = 'Admin not found.'; }
         }
     }
 
@@ -629,7 +688,16 @@ if ($logged) {
     if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id']) && isset($_GET['target']) && isset($files[$_GET['target']])) {
         $t = $_GET['target'];
         $id = (int)$_GET['id'];
-        if ($db_mode !== 'json') {
+        
+        // Check permission for this section
+        $can_delete = false;
+        if ($t === 'sprouttube' && has_permission('sprouttube')) $can_delete = true;
+        if ($t === 'photography' && has_permission('photography')) $can_delete = true;
+        if ($t === 'stuff' && has_permission('stuff')) $can_delete = true;
+        
+        if (!$can_delete) {
+            $error = 'Access denied to delete from this section.';
+        } elseif ($db_mode !== 'json') {
             if (db_delete_global($t, $id)) {
                 $flash = 'Entry deleted (DB).';
                 header('Location: admin.php?view=' . urlencode($t));
@@ -710,11 +778,17 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
             <a href="index.html" class="tab back-btn">Back to Site</a>
         </div>
         <div class="tabs" style="display:flex;align-items:center;gap:8px">
-            <a class="tab <?php echo $view==='sprouttube'? 'active':'';?>" href="?view=sprouttube">SproutTube</a>
-            <a class="tab <?php echo $view==='stuff'? 'active':'';?>" href="?view=stuff">Stuff</a>
-            <a class="tab <?php echo $view==='photography'? 'active':'';?>" href="?view=photography">Photography</a>
-            <?php if ($is_superadmin): ?>
-                <a class="tab <?php echo $view==='admins'? 'active':'';?>" href="?view=admins">Admin Account</a>
+            <?php if (has_permission('sprouttube')): ?>
+                <a class="tab <?php echo $view==='sprouttube'? 'active':'';?>" href="?view=sprouttube">SproutTube</a>
+            <?php endif; ?>
+            <?php if (has_permission('stuff')): ?>
+                <a class="tab <?php echo $view==='stuff'? 'active':'';?>" href="?view=stuff">Stuff</a>
+            <?php endif; ?>
+            <?php if (has_permission('photography')): ?>
+                <a class="tab <?php echo $view==='photography'? 'active':'';?>" href="?view=photography">Photography</a>
+            <?php endif; ?>
+            <?php if (has_permission('admin_accounts')): ?>
+                <a class="tab <?php echo $view==='admins'? 'active':'';?>" href="?view=admins">Admin Accounts</a>
             <?php endif; ?>
             <?php if ($logged): ?>
                 <a class="tab logout-btn" href="?action=logout">Logout</a>
@@ -807,17 +881,25 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                     $editId = '';
                     // Admin edit defaults (initialize so template won't warn)
                     $editingAdmin = false;
-                    $adminEditVals = ['user'=>'','password'=>'','superadmin'=>false];
+                    $adminEditVals = [
+                        'user'=>'',
+                        'password'=>'',
+                        'permissions'=>['sprouttube'=>false,'photography'=>false,'stuff'=>false,'admin_accounts'=>false]
+                    ];
                     $adminEditUser = '';
 
                     // If a GET editadmin action is present (navigating to edit an admin), prefill values
-                    if ($is_superadmin && isset($_GET['action']) && $_GET['action'] === 'editadmin' && isset($_GET['user'])) {
+                    if (has_permission('admin_accounts') && isset($_GET['action']) && $_GET['action'] === 'editadmin' && isset($_GET['user'])) {
                         $u = $_GET['user'];
                         $alist = load_admins_file();
                         foreach ($alist as $a) {
                             if (($a['user'] ?? '') === $u) {
                                 $editingAdmin = true;
-                                $adminEditVals = ['user'=>$a['user'],'password'=>$a['password'],'superadmin'=>!empty($a['superadmin'])];
+                                $adminEditVals = [
+                                    'user'=>$a['user'],
+                                    'password'=>$a['password'],
+                                    'permissions'=>$a['permissions'] ?? ['sprouttube'=>false,'photography'=>false,'stuff'=>false,'admin_accounts'=>false]
+                                ];
                                 $adminEditUser = $a['user'];
                                 break;
                             }
@@ -839,22 +921,7 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                                 $editId = $id;
                             }
                         }
-                        // Admin edit prefill (for superadmins)
-                        $editingAdmin = false;
-                        $adminEditVals = ['user'=>'','password'=>'','superadmin'=>false];
-                        $adminEditUser = '';
-                        if ($is_superadmin && isset($_GET['action']) && $_GET['action'] === 'editadmin' && isset($_GET['user'])) {
-                            $u = $_GET['user'];
-                            $alist = load_admins_file();
-                            foreach ($alist as $a) {
-                                if (($a['user'] ?? '') === $u) {
-                                    $editingAdmin = true;
-                                    $adminEditVals = ['user'=>$a['user'],'password'=>$a['password'],'superadmin'=>!empty($a['superadmin'])];
-                                    $adminEditUser = $a['user'];
-                                    break;
-                                }
-                            }
-                        }
+
                     }
                 ?>
 
@@ -948,23 +1015,30 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                 </div>
             </div>
 
-            <?php if ($is_superadmin): ?>
+            <?php if (has_permission('admin_accounts')): ?>
             <?php if ($view === 'admins'): ?>
             <div id="admins" style="margin-top:20px">
                 <div class="card">
                     <h3>Admin Accounts</h3>
-                    <div class="small">Logged in as: <strong><?php echo e($current_user); ?></strong> — Superadmin: <?php echo $is_superadmin? 'Yes':'No'; ?></div>
+                    <div class="small">Logged in as: <strong><?php echo e($current_user); ?></strong></div>
                     <div style="margin-top:12px">
                         <table style="width:100%;border-collapse:collapse">
-                            <thead><tr><th style="text-align:left">Username</th><th>Superadmin</th><th>Actions</th></tr></thead>
+                            <thead><tr><th style="text-align:left">Username</th><th>Permissions</th><th>Actions</th></tr></thead>
                             <tbody>
                             <?php
                                 $alist = load_admins_file();
                                 foreach ($alist as $a):
+                                    $perms = $a['permissions'] ?? [];
+                                    $perm_list = [];
+                                    if (!empty($perms['sprouttube'])) $perm_list[] = 'ST';
+                                    if (!empty($perms['photography'])) $perm_list[] = 'Photo';
+                                    if (!empty($perms['stuff'])) $perm_list[] = 'Stuff';
+                                    if (!empty($perms['admin_accounts'])) $perm_list[] = 'Admin';
+                                    $perm_str = !empty($perm_list) ? implode(', ', $perm_list) : 'None';
                             ?>
                                 <tr style="border-top:1px solid #f3f3f3">
                                     <td><?php echo e($a['user'] ?? ''); ?></td>
-                                    <td style="text-align:center"><?php echo !empty($a['superadmin'])? 'Yes':'No'; ?></td>
+                                    <td style="text-align:center;font-size:12px"><?php echo $perm_str; ?></td>
                                     <td>
                                         <a class="tab" href="?view=admins&action=editadmin&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Edit</a>
                                         <?php if (($a['user'] ?? '') !== $current_user): ?>
@@ -972,7 +1046,6 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                                         <?php else: ?>
                                             <span class="small">(current)</span>
                                         <?php endif; ?>
-                                        <a class="tab" href="?view=admins&action=togglesuper&user=<?php echo urlencode($a['user'] ?? ''); ?>#admins">Toggle Super</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -1004,7 +1077,21 @@ function val($arr, $key) { return isset($arr[$key]) ? e($arr[$key]) : ''; }
                                 <?php endif; ?>
                             </div>
                             <div class="row">
-                                <label><input type="checkbox" name="<?php echo $editingAdmin? 'edit_super':'new_super'; ?>" <?php echo ($editingAdmin && !empty($adminEditVals['superadmin']))? 'checked':''; ?>> Superadmin</label>
+                                <label style="font-weight:700;margin-bottom:8px">Permissions:</label>
+                                <div style="margin-left:12px">
+                                    <label style="display:block;margin-bottom:4px;font-weight:normal">
+                                        <input type="checkbox" name="perm_sprouttube" <?php echo (!empty($adminEditVals['permissions']['sprouttube']))? 'checked':''; ?>> SproutTube
+                                    </label>
+                                    <label style="display:block;margin-bottom:4px;font-weight:normal">
+                                        <input type="checkbox" name="perm_photography" <?php echo (!empty($adminEditVals['permissions']['photography']))? 'checked':''; ?>> Photography
+                                    </label>
+                                    <label style="display:block;margin-bottom:4px;font-weight:normal">
+                                        <input type="checkbox" name="perm_stuff" <?php echo (!empty($adminEditVals['permissions']['stuff']))? 'checked':''; ?>> Stuff
+                                    </label>
+                                    <label style="display:block;margin-bottom:4px;font-weight:normal">
+                                        <input type="checkbox" name="perm_admin_accounts" <?php echo (!empty($adminEditVals['permissions']['admin_accounts']))? 'checked':''; ?>> Admin Accounts
+                                    </label>
+                                </div>
                             </div>
                             <div style="display:flex;gap:8px;align-items:center">
                                 <?php if ($editingAdmin): ?>
